@@ -1,0 +1,361 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+// Create Supabase client with extended timeout and retry configuration
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        "X-Client-Info": "prediction-dashboard/1.0.0",
+      },
+    },
+  }
+);
+
+// Retry function for upload operations
+async function retryUpload<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      lastError = error;
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.log(`🔄 Upload attempt ${attempt} failed:`, errorMessage);
+
+      if (attempt < maxRetries) {
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const walletAddress = request.headers.get("x-wallet-address");
+    console.log("🔍 Upload API - Wallet address from header:", walletAddress);
+
+    if (!walletAddress) {
+      console.log("❌ Upload API - No wallet address provided");
+      return NextResponse.json(
+        { error: "Wallet address required" },
+        { status: 401 }
+      );
+    }
+
+    // Check if user is admin
+    console.log(
+      "🔍 Upload API - Checking admin status for wallet:",
+      walletAddress
+    );
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("wallet_address", walletAddress)
+      .single();
+
+    console.log("🔍 Upload API - User query result:", { user, userError });
+
+    if (userError) {
+      console.log("❌ Upload API - User query error:", userError);
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (user?.role !== "admin") {
+      console.log("❌ Upload API - User is not admin:", {
+        walletAddress,
+        role: user?.role,
+      });
+      return NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    console.log(
+      "✅ Upload API - Admin access confirmed for wallet:",
+      walletAddress
+    );
+
+    const formData = await request.formData();
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const modelFile = formData.get("modelFile") as File;
+    const featuresFile = formData.get("featuresFile") as File | null;
+    const useManualFeatures = formData.get("useManualFeatures") === "true";
+    const ownerWalletAddress = (
+      (formData.get("ownerWalletAddress") as string) || walletAddress
+    ).toLowerCase();
+
+    console.log("🔍 Upload API - Form data received:", {
+      name,
+      description: description?.substring(0, 50) + "...",
+      modelFileName: modelFile?.name,
+      modelFileSize: modelFile?.size,
+      featuresFileName: featuresFile?.name,
+      useManualFeatures,
+      ownerWalletAddress,
+    });
+
+    if (!name || !modelFile) {
+      console.log("❌ Upload API - Missing required fields:", {
+        name: !!name,
+        modelFile: !!modelFile,
+      });
+      return NextResponse.json(
+        { error: "Name and model file are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate model file
+    if (!modelFile.name.endsWith(".pkl")) {
+      console.log("❌ Upload API - Invalid model file type:", modelFile.name);
+      return NextResponse.json(
+        { error: "Model file must be a .pkl file" },
+        { status: 400 }
+      );
+    }
+
+    if (modelFile.size > 50 * 1024 * 1024) {
+      console.log("❌ Upload API - Model file too large:", modelFile.size);
+      return NextResponse.json(
+        { error: "Model file size must be less than 50MB" },
+        { status: 400 }
+      );
+    }
+
+    // Validate features file if provided
+    if (useManualFeatures && featuresFile) {
+      if (!featuresFile.name.endsWith(".json")) {
+        console.log(
+          "❌ Upload API - Invalid features file type:",
+          featuresFile.name
+        );
+        return NextResponse.json(
+          { error: "Features file must be a .json file" },
+          { status: 400 }
+        );
+      }
+
+      if (featuresFile.size > 1 * 1024 * 1024) {
+        console.log(
+          "❌ Upload API - Features file too large:",
+          featuresFile.size
+        );
+        return NextResponse.json(
+          { error: "Features file size must be less than 1MB" },
+          { status: 400 }
+        );
+      }
+    }
+
+    console.log("✅ Upload API - File validation passed");
+
+    // Convert files to buffers
+    const modelBuffer = Buffer.from(await modelFile.arrayBuffer());
+    const featuresBuffer = featuresFile
+      ? Buffer.from(await featuresFile.arrayBuffer())
+      : null;
+
+    // Generate model hash
+    const modelHash = crypto
+      .createHash("sha256")
+      .update(modelBuffer)
+      .digest("hex");
+    console.log("🔍 Upload API - Generated model hash:", modelHash);
+
+    // Generate version number
+    console.log("🔍 Upload API - Checking existing models for version");
+    const { data: existingModels, error: versionError } = await supabase
+      .from("models")
+      .select("version")
+      .eq("name", name)
+      .order("version", { ascending: false })
+      .limit(1);
+
+    if (versionError) {
+      console.log("❌ Upload API - Version query error:", versionError);
+      return NextResponse.json(
+        { error: "Failed to check model version" },
+        { status: 500 }
+      );
+    }
+
+    const version =
+      existingModels && existingModels.length > 0
+        ? existingModels[0].version + 1
+        : 1;
+    console.log("🔍 Upload API - Model version:", version);
+
+    // Create model path
+    const modelFileName = `model_v${version}.pkl`;
+    const modelPath = `models/${name
+      .replace(/\s+/g, "_")
+      .toLowerCase()}/${modelFileName}`;
+    console.log("🔍 Upload API - Model path:", modelPath);
+
+    // Upload model to Supabase Storage with retry logic
+    console.log("🔍 Upload API - Uploading model to storage");
+    let uploadData;
+    try {
+      uploadData = await retryUpload(
+        async () => {
+          const { data, error } = await supabase.storage
+            .from("ml-models")
+            .upload(modelPath, modelBuffer, {
+              contentType: "application/octet-stream",
+              upsert: false,
+              cacheControl: "3600",
+            });
+
+          if (error) {
+            throw error;
+          }
+
+          return data;
+        },
+        3,
+        2000
+      ); // 3 retries with 2s initial delay
+    } catch (modelUploadError: unknown) {
+      const errorMessage =
+        modelUploadError instanceof Error
+          ? modelUploadError.message
+          : String(modelUploadError);
+      console.error("❌ Upload API - Model upload error details:", {
+        message: errorMessage,
+        name:
+          modelUploadError instanceof Error ? modelUploadError.name : "Unknown",
+        stack:
+          modelUploadError instanceof Error
+            ? modelUploadError.stack
+            : undefined,
+      });
+      return NextResponse.json(
+        { error: `Failed to upload model file: ${errorMessage}` },
+        { status: 500 }
+      );
+    }
+
+    console.log(
+      "✅ Upload API - Model uploaded to storage successfully:",
+      uploadData
+    );
+
+    // Upload features file if provided
+    let featuresPath: string | null = null;
+    if (useManualFeatures && featuresBuffer) {
+      const featuresFileName = `features_v${version}.json`;
+      featuresPath = `features/${name
+        .replace(/\s+/g, "_")
+        .toLowerCase()}/${featuresFileName}`;
+
+      console.log(
+        "🔍 Upload API - Uploading features to storage:",
+        featuresPath
+      );
+
+      try {
+        await retryUpload(
+          async () => {
+            const { error } = await supabase.storage
+              .from("features-uploads")
+              .upload(featuresPath!, featuresBuffer, {
+                contentType: "application/json",
+                upsert: false,
+                cacheControl: "3600",
+              });
+
+            if (error) {
+              throw error;
+            }
+          },
+          3,
+          1000
+        );
+
+        console.log(
+          "✅ Upload API - Features uploaded to storage successfully"
+        );
+      } catch (featuresUploadError) {
+        console.error(
+          "❌ Upload API - Features upload error:",
+          featuresUploadError
+        );
+        return NextResponse.json(
+          { error: "Failed to upload features file" },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Create model record in database
+    console.log("🔍 Upload API - Creating model record in database");
+    const { data: model, error: dbError } = await supabase
+      .from("models")
+      .insert({
+        name,
+        description,
+        version,
+        model_path: modelPath,
+        features_path: featuresPath || null,
+        model_hash: modelHash,
+        owner_wallet: ownerWalletAddress,
+        is_active: false,
+        use_manual_features: useManualFeatures,
+        nft_id: null, // Will be set in activation step
+      })
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error("❌ Upload API - Database error:", dbError);
+      return NextResponse.json(
+        { error: "Failed to create model record" },
+        { status: 500 }
+      );
+    }
+
+    console.log("✅ Upload API - Model record created successfully:", model.id);
+
+    return NextResponse.json({
+      success: true,
+      model: {
+        id: model.id,
+        name: model.name,
+        description: model.description,
+        version: model.version,
+        model_path: model.model_path,
+        model_hash: model.model_hash,
+        owner_wallet: model.owner_wallet,
+        use_manual_features: model.use_manual_features,
+        is_active: model.is_active,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Upload API - Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

@@ -1,0 +1,69 @@
+# Node modules
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependency directories
+.pnp/
+.pnp.js
+
+# Environment variables
+.env
+.env.*.local
+
+# Next.js build cache
+.next/
+.next/cache/
+
+# Vercel deployment
+.vercel/
+
+# Output of `next export`
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs/editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Optional npm cache directory
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# Test coverage
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Ignore local yarn/npm logs
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Optional: if using TurboRepo
+turbo/
+
+# Optional: lock files (pick only the one you use)
+package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

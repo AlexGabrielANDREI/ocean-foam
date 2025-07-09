@@ -1,0 +1,48 @@
+{
+  "name": "prediction-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "init-storage": "node scripts/init-storage.js",
+    "test-connection": "node scripts/test-connection.js",
+    "run-migration": "node scripts/run-migration.js",
+    "fix-upload": "node scripts/fix-upload-issues.js",
+    "check-db": "node scripts/check-database.js",
+    "test-upload": "node scripts/test-upload.js",
+    "add-columns": "node scripts/add-missing-columns.js",
+    "check-models": "node scripts/check-models.js",
+    "fix-wallet": "node scripts/fix-wallet-case.js"
+  },
+  "dependencies": {
+    "@hashgraph/sdk": "^2.40.0",
+    "@supabase/auth-helpers-nextjs": "^0.8.7",
+    "@supabase/auth-helpers-react": "^0.4.2",
+    "@supabase/supabase-js": "^2.38.5",
+    "clsx": "^2.0.0",
+    "dotenv": "^17.2.0",
+    "ethers": "^6.8.1",
+    "lucide-react": "^0.294.0",
+    "next": "14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
+    "react-hot-toast": "^2.4.1",
+    "tailwind-merge": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "14.0.4",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3"
+  }
+}
