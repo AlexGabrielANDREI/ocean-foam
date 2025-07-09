@@ -20,186 +20,217 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const modelId = formData.get("modelId") as string;
-    const featuresFile = formData.get("featuresFile") as File | null;
-    const apiParams = formData.get("apiParams") as string | null;
-
-    if (!modelId) {
-      return NextResponse.json(
-        { error: "Model ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Get model details
+    // Find the single active model
     const { data: model, error: modelError } = await supabase
       .from("models")
       .select("*")
-      .eq("id", modelId)
       .eq("is_active", true)
       .single();
 
     if (modelError || !model) {
       return NextResponse.json(
-        { error: "Model not found or not active" },
+        { error: "No active model found" },
         { status: 404 }
       );
-    }
-
-    // Check if user exists (tokens not implemented in current schema)
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("wallet_address", walletAddress)
-      .single();
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     let predictionResult: any = null;
     let tempFiles: string[] = [];
 
     try {
+      // Download model file from storage
+      console.log(
+        "Prediction API - Downloading model from path:",
+        model.model_path
+      );
+      const { data: modelData, error: modelDownloadError } =
+        await supabase.storage.from("ml-models").download(model.model_path);
+      if (modelDownloadError || !modelData) {
+        return NextResponse.json(
+          { error: "Failed to download model file" },
+          { status: 500 }
+        );
+      }
+      const tempDir = os.tmpdir();
+      const modelTempPath = path.join(tempDir, `model_${Date.now()}.pkl`);
+      await writeFile(
+        modelTempPath,
+        Buffer.from(await modelData.arrayBuffer())
+      );
+      tempFiles.push(modelTempPath);
+
       if (model.use_manual_features) {
-        // Manual features flow
-        if (!featuresFile) {
+        // Download features file from storage
+        const { data: featuresBlob, error: featuresError } =
+          await supabase.storage
+            .from("features-uploads")
+            .download(model.features_path);
+        if (featuresError || !featuresBlob) {
           return NextResponse.json(
-            { error: "Features file required for manual features model" },
-            { status: 400 }
-          );
-        }
-
-        // Validate features file
-        if (!featuresFile.name.endsWith(".json")) {
-          return NextResponse.json(
-            { error: "Features file must be a .json file" },
-            { status: 400 }
-          );
-        }
-
-        if (featuresFile.size > 1 * 1024 * 1024) {
-          return NextResponse.json(
-            { error: "Features file size must be less than 1MB" },
-            { status: 400 }
-          );
-        }
-
-        // Download model file from storage
-        const { data: modelData, error: modelDownloadError } =
-          await supabase.storage.from("models").download(model.model_path);
-
-        if (modelDownloadError || !modelData) {
-          return NextResponse.json(
-            { error: "Failed to download model file" },
+            { error: "Failed to download features file" },
             { status: 500 }
           );
         }
-
-        // Save model and features to temp files
-        const tempDir = os.tmpdir();
-        const modelTempPath = path.join(tempDir, `model_${Date.now()}.pkl`);
         const featuresTempPath = path.join(
           tempDir,
           `features_${Date.now()}.json`
         );
-
-        await writeFile(
-          modelTempPath,
-          Buffer.from(await modelData.arrayBuffer())
-        );
         await writeFile(
           featuresTempPath,
-          Buffer.from(await featuresFile.arrayBuffer())
+          Buffer.from(await featuresBlob.arrayBuffer())
         );
-
-        tempFiles.push(modelTempPath, featuresTempPath);
-
-        // Run manual features prediction script
-        predictionResult = await runManualFeaturesPrediction(
+        tempFiles.push(featuresTempPath);
+        // Run manual features prediction script and log all output
+        const { spawn } = require("child_process");
+        const py = spawn("python", [
+          "scripts/predict_manual.py",
           modelTempPath,
-          featuresTempPath
-        );
-      } else {
-        // API features flow
-        let apiParamsObj = {};
-        if (apiParams) {
-          try {
-            apiParamsObj = JSON.parse(apiParams);
-          } catch (e) {
-            return NextResponse.json(
-              { error: "Invalid API parameters JSON" },
-              { status: 400 }
-            );
+          featuresTempPath,
+        ]);
+        let pyStdout = "";
+        let pyStderr = "";
+        py.stdout.on("data", (data: Buffer) => {
+          pyStdout += data.toString();
+        });
+        py.stderr.on("data", (data: Buffer) => {
+          pyStderr += data.toString();
+        });
+        await new Promise<void>((resolve, reject) => {
+          py.on("close", (code: number) => {
+            console.log("PYTHON STDOUT:", pyStdout);
+            if (pyStderr) console.error("PYTHON STDERR:", pyStderr);
+            if (code !== 0) reject(new Error("Python script failed"));
+            else resolve();
+          });
+        });
+        // Robustly parse the first valid JSON object from pyStdout
+        console.log("Raw Python stdout:", pyStdout);
+        console.log("Python stdout length:", pyStdout.length);
+
+        // Try to parse the entire stdout first
+        try {
+          predictionResult = JSON.parse(pyStdout.trim());
+          console.log("Successfully parsed entire stdout");
+        } catch (e) {
+          console.log("Failed to parse entire stdout, trying line by line");
+          // If that fails, try line by line
+          for (const line of pyStdout.split(/\r?\n/)) {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+              try {
+                const obj = JSON.parse(trimmedLine);
+                predictionResult = obj;
+                console.log("Successfully parsed line:", trimmedLine);
+                break;
+              } catch (e) {
+                console.log("Failed to parse line:", trimmedLine);
+              }
+            }
           }
         }
 
-        // Download model file from storage
-        const { data: modelData, error: modelDownloadError } =
-          await supabase.storage.from("models").download(model.model_path);
-
-        if (modelDownloadError || !modelData) {
-          return NextResponse.json(
-            { error: "Failed to download model file" },
-            { status: 500 }
-          );
+        if (!predictionResult) {
+          console.error("Failed to parse any JSON from Python output");
+          console.error("Python stdout:", pyStdout);
+          throw new Error("No valid JSON result from Python script");
         }
 
-        // Save model to temp file
-        const tempDir = os.tmpdir();
-        const modelTempPath = path.join(tempDir, `model_${Date.now()}.pkl`);
-        const apiParamsTempPath = path.join(
-          tempDir,
-          `api_params_${Date.now()}.json`
-        );
-
-        await writeFile(
-          modelTempPath,
-          Buffer.from(await modelData.arrayBuffer())
-        );
-        await writeFile(apiParamsTempPath, JSON.stringify(apiParamsObj));
-
-        tempFiles.push(modelTempPath, apiParamsTempPath);
-
-        // Run API features prediction script
-        predictionResult = await runAPIFeaturesPrediction(
-          modelTempPath,
-          apiParamsTempPath
-        );
+        console.log("Final prediction result:", predictionResult);
+      } else {
+        // API features flow (no params)
+        predictionResult = await runAPIFeaturesPrediction(modelTempPath, "");
       }
 
-      if (!predictionResult.success) {
+      console.log("Before validation - predictionResult:", predictionResult);
+      console.log(
+        "Before validation - typeof predictionResult:",
+        typeof predictionResult
+      );
+      console.log(
+        "Before validation - predictionResult === null:",
+        predictionResult === null
+      );
+      console.log(
+        "Before validation - predictionResult === undefined:",
+        predictionResult === undefined
+      );
+
+      // Robustly handle prediction result
+      if (
+        !predictionResult ||
+        (typeof predictionResult === "object" && "error" in predictionResult)
+      ) {
+        console.error("Prediction result validation failed:", predictionResult);
         return NextResponse.json(
-          { error: predictionResult.error },
+          { error: predictionResult?.error || "Prediction failed" },
           { status: 500 }
         );
       }
 
-      // Log prediction (tokens not implemented in current schema)
-      await supabase.from("predictions").insert({
-        user_wallet: walletAddress,
-        model_id: modelId,
-        prediction_result: predictionResult,
-        tokens_used: 0, // No tokens in current schema
-        prediction_type: model.use_manual_features
-          ? "manual_features"
-          : "api_features",
+      console.log("Prediction result structure:", {
+        hasPrediction: !!predictionResult.prediction,
+        hasConfidence: !!predictionResult.confidence,
+        hasProbabilities: !!predictionResult.probabilities,
+        predictionType: typeof predictionResult.prediction,
+        confidenceType: typeof predictionResult.confidence,
       });
+
+      // Look up user by wallet address
+      console.log("Looking up user with wallet address:", walletAddress);
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("wallet_address", walletAddress)
+        .single();
+      if (userError || !user) {
+        console.error("User lookup error:", userError);
+        console.error("User lookup failed for wallet:", walletAddress);
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      console.log("User found:", { userId: user.id, walletAddress });
+
+      // Log prediction
+      console.log("Inserting prediction with data:", {
+        user_id: user.id,
+        model_id: model.id,
+        prediction_result: predictionResult.prediction,
+        prediction_score: predictionResult.confidence,
+        features_used: model.use_manual_features ? "manual" : "api",
+        features_data: predictionResult.probabilities,
+        transaction_hash: null,
+      });
+
+      const { error: insertError } = await supabase.from("predictions").insert({
+        user_id: user.id,
+        model_id: model.id,
+        prediction_result: predictionResult.prediction, // string
+        prediction_score: predictionResult.confidence, // number
+        features_used: model.use_manual_features ? "manual" : "api",
+        features_data: predictionResult.probabilities, // or null
+        transaction_hash: null,
+      });
+      if (insertError) {
+        console.error("Insert prediction error:", insertError);
+        return NextResponse.json(
+          { error: "Failed to log prediction" },
+          { status: 500 }
+        );
+      }
+
+      console.log("Prediction inserted successfully");
 
       return NextResponse.json({
         success: true,
         prediction: predictionResult,
-        tokens_remaining: 0, // No tokens in current schema
+        tokens_remaining: 0,
       });
     } finally {
       // Clean up temp files
       for (const tempFile of tempFiles) {
         try {
           await unlink(tempFile);
-        } catch (e) {
-          console.error(`Failed to delete temp file ${tempFile}:`, e);
-        }
+        } catch (e) {}
       }
     }
   } catch (error) {

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import slugify from "slugify";
 
 // Create Supabase client with extended timeout and retry configuration
 const supabase = createClient(
@@ -206,106 +207,32 @@ export async function POST(request: NextRequest) {
         : 1;
     console.log("🔍 Upload API - Model version:", version);
 
-    // Create model path
-    const modelFileName = `model_v${version}.pkl`;
-    const modelPath = `models/${name
-      .replace(/\s+/g, "_")
-      .toLowerCase()}/${modelFileName}`;
-    console.log("🔍 Upload API - Model path:", modelPath);
+    // Slugify model name for folder
+    const modelFolder = `${ownerWalletAddress}/${slugify(name, {
+      lower: true,
+      strict: true,
+      replacement: "_",
+    })}`;
+    const modelFilePath = `${modelFolder}/model.pkl`;
+    const featuresFilePath = `${modelFolder}/features.json`;
 
-    // Upload model to Supabase Storage with retry logic
-    console.log("🔍 Upload API - Uploading model to storage");
-    let uploadData;
-    try {
-      uploadData = await retryUpload(
-        async () => {
-          const { data, error } = await supabase.storage
-            .from("ml-models")
-            .upload(modelPath, modelBuffer, {
-              contentType: "application/octet-stream",
-              upsert: false,
-              cacheControl: "3600",
-            });
-
-          if (error) {
-            throw error;
-          }
-
-          return data;
-        },
-        3,
-        2000
-      ); // 3 retries with 2s initial delay
-    } catch (modelUploadError: unknown) {
-      const errorMessage =
-        modelUploadError instanceof Error
-          ? modelUploadError.message
-          : String(modelUploadError);
-      console.error("❌ Upload API - Model upload error details:", {
-        message: errorMessage,
-        name:
-          modelUploadError instanceof Error ? modelUploadError.name : "Unknown",
-        stack:
-          modelUploadError instanceof Error
-            ? modelUploadError.stack
-            : undefined,
-      });
-      return NextResponse.json(
-        { error: `Failed to upload model file: ${errorMessage}` },
-        { status: 500 }
-      );
-    }
-
-    console.log(
-      "✅ Upload API - Model uploaded to storage successfully:",
-      uploadData
+    // Upload model file (always overwrite)
+    await retryUpload(() =>
+      supabase.storage.from("ml-models").upload(modelFilePath, modelBuffer, {
+        upsert: true,
+        contentType: "application/octet-stream",
+      })
     );
-
-    // Upload features file if provided
-    let featuresPath: string | null = null;
+    // Upload features file if present
     if (useManualFeatures && featuresBuffer) {
-      const featuresFileName = `features_v${version}.json`;
-      featuresPath = `features/${name
-        .replace(/\s+/g, "_")
-        .toLowerCase()}/${featuresFileName}`;
-
-      console.log(
-        "🔍 Upload API - Uploading features to storage:",
-        featuresPath
+      await retryUpload(() =>
+        supabase.storage
+          .from("features-uploads")
+          .upload(featuresFilePath, featuresBuffer, {
+            upsert: true,
+            contentType: "application/json",
+          })
       );
-
-      try {
-        await retryUpload(
-          async () => {
-            const { error } = await supabase.storage
-              .from("features-uploads")
-              .upload(featuresPath!, featuresBuffer, {
-                contentType: "application/json",
-                upsert: false,
-                cacheControl: "3600",
-              });
-
-            if (error) {
-              throw error;
-            }
-          },
-          3,
-          1000
-        );
-
-        console.log(
-          "✅ Upload API - Features uploaded to storage successfully"
-        );
-      } catch (featuresUploadError) {
-        console.error(
-          "❌ Upload API - Features upload error:",
-          featuresUploadError
-        );
-        return NextResponse.json(
-          { error: "Failed to upload features file" },
-          { status: 500 }
-        );
-      }
     }
 
     // Create model record in database
@@ -316,8 +243,9 @@ export async function POST(request: NextRequest) {
         name,
         description,
         version,
-        model_path: modelPath,
-        features_path: featuresPath || null,
+        model_path: modelFilePath,
+        features_path:
+          useManualFeatures && featuresBuffer ? featuresFilePath : null,
         model_hash: modelHash,
         owner_wallet: ownerWalletAddress,
         is_active: false,

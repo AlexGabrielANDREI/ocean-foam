@@ -110,14 +110,20 @@ def main():
     input_df = prepare_input_from_json(json_path, feature_columns)
     if input_df is None:
         sys.exit(1)
-    
+
+    # Debug prints for feature shape and names
+    print("Input DataFrame shape:", input_df.shape, file=sys.stderr)
+    print("Input DataFrame columns:", list(input_df.columns), file=sys.stderr)
+    print("Model expects n_features_in_:", getattr(model, 'n_features_in_', 'N/A'), file=sys.stderr)
+    print("Model expects feature_names_in_:", getattr(model, 'feature_names_in_', 'N/A'), file=sys.stderr)
+
     # Make prediction
     result = predict(model, input_df)
     if result is None:
         sys.exit(1)
     
     # Output result as JSON
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result))
 
 if __name__ == "__main__":
     main() 

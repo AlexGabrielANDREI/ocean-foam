@@ -16,5 +16,6 @@ export default function Home() {
     return <LoginScreen />;
   }
 
+  // Always render the Dashboard component, which will handle internal routing
   return <Dashboard />;
 }

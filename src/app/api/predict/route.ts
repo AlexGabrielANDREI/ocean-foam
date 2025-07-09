@@ -17,25 +17,18 @@ export async function POST(request: NextRequest) {
     const authRequest = await authenticateRequest(request);
     const { user } = authRequest;
 
-    const { model_id, features_used, features_data, transaction_hash } =
-      await request.json();
+    // No need to parse request body
 
-    // Mock payment validation (in production, validate against blockchain)
-    if (!transaction_hash) {
-      return NextResponse.json({ error: "Payment required" }, { status: 402 });
-    }
-
-    // Get active model
+    // Find the single active model
     const { data: model, error: modelError } = await supabase
       .from("models")
       .select("*")
-      .eq("id", model_id)
       .eq("is_active", true)
       .single();
 
     if (modelError || !model) {
       return NextResponse.json(
-        { error: "Model not found or inactive" },
+        { error: "No active model found" },
         { status: 404 }
       );
     }
@@ -58,24 +51,33 @@ export async function POST(request: NextRequest) {
     const modelBuffer = Buffer.from(await modelBlob.arrayBuffer());
     writeFileSync(tempModelPath, modelBuffer);
 
-    // Run prediction based on features source
     let predictionResult;
 
-    if (features_used === "manual") {
+    if (model.use_manual_features) {
+      // Download features file from storage
+      const { data: featuresBlob, error: featuresError } =
+        await supabase.storage
+          .from("features-uploads")
+          .download(model.features_path);
+      if (featuresError || !featuresBlob) {
+        return NextResponse.json(
+          { error: "Failed to download features file" },
+          { status: 500 }
+        );
+      }
       // Save features to temporary file
       const featuresPath = path.join(
         process.cwd(),
         "temp",
         `features_${Date.now()}.json`
       );
-      writeFileSync(featuresPath, JSON.stringify(features_data));
-
+      const featuresBuffer = Buffer.from(await featuresBlob.arrayBuffer());
+      writeFileSync(featuresPath, featuresBuffer);
       // Run manual prediction script
       const { stdout } = await execAsync(
         `python scripts/predict_manual.py "${tempModelPath}" "${featuresPath}"`
       );
       predictionResult = JSON.parse(stdout);
-
       // Clean up temporary files
       unlinkSync(featuresPath);
     } else {
@@ -96,12 +98,12 @@ export async function POST(request: NextRequest) {
         .from("predictions")
         .insert({
           user_id: user.id,
-          model_id,
+          model_id: model.id,
           prediction_result: predictionResult.prediction,
           prediction_score: predictionResult.confidence,
-          features_used,
-          features_data: features_used === "manual" ? features_data : null,
-          transaction_hash,
+          features_used: model.use_manual_features ? "manual" : "api",
+          features_data: null,
+          transaction_hash: null,
         })
         .select()
         .single();
@@ -120,7 +122,6 @@ export async function POST(request: NextRequest) {
         result: predictionResult.prediction,
         confidence: predictionResult.confidence,
         probabilities: predictionResult.probabilities,
-        transaction_hash,
       },
     });
   } catch (error) {
