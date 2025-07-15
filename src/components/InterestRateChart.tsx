@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
+import PaymentModal from "./PaymentModal";
 
 interface InterestRateData {
   Date: string;
@@ -44,13 +45,26 @@ interface Model {
   is_active: boolean;
 }
 
-export default function InterestRateChart() {
+interface InterestRateChartProps {
+  paymentRequired?: boolean;
+  showPaymentModal?: boolean;
+  onShowPaymentModal?: () => void;
+  onPaymentSuccess?: () => void;
+}
+
+export default function InterestRateChart({
+  paymentRequired = false,
+  showPaymentModal,
+  onShowPaymentModal,
+  onPaymentSuccess,
+}: InterestRateChartProps) {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
+  const [paymentComplete, setPaymentComplete] = useState(false);
 
   useEffect(() => {
     loadInterestRateData();
@@ -119,6 +133,20 @@ export default function InterestRateChart() {
     } finally {
       setPredictionLoading(false);
     }
+  };
+
+  const handlePredictClick = () => {
+    if (paymentRequired && !paymentComplete) {
+      onShowPaymentModal && onShowPaymentModal();
+    } else {
+      handleRunPrediction();
+    }
+  };
+
+  const handlePaymentSuccessInternal = () => {
+    setPaymentComplete(true);
+    onPaymentSuccess && onPaymentSuccess();
+    handleRunPrediction();
   };
 
   const formatDate = (dateString: string) => {
@@ -321,14 +349,23 @@ export default function InterestRateChart() {
           {activeModel && (
             <div className="absolute bottom-4 left-4">
               <button
-                onClick={handleRunPrediction}
+                onClick={handlePredictClick}
                 className="btn-primary flex items-center space-x-2 shadow-lg"
-                disabled={predictionLoading}
+                disabled={
+                  predictionLoading ||
+                  (paymentRequired && paymentComplete) ||
+                  (showPaymentModal && paymentRequired)
+                }
               >
                 {predictionLoading ? (
                   <>
                     <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
                     <span>Predicting...</span>
+                  </>
+                ) : paymentRequired && paymentComplete ? (
+                  <>
+                    <Play className="w-4 h-4" />
+                    <span>Payment Complete</span>
                   </>
                 ) : (
                   <>
@@ -337,6 +374,13 @@ export default function InterestRateChart() {
                   </>
                 )}
               </button>
+              {paymentRequired && (
+                <PaymentModal
+                  open={!!showPaymentModal}
+                  onClose={() => onShowPaymentModal && onShowPaymentModal()}
+                  onPaid={handlePaymentSuccessInternal}
+                />
+              )}
             </div>
           )}
         </div>

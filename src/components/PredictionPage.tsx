@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import InterestRateChart from "./InterestRateChart";
+import PaymentModal from "./PaymentModal";
 
 interface Model {
   id: string;
@@ -26,6 +27,8 @@ interface Model {
 export default function PredictionPage() {
   const { user } = useAuth();
   const [activeModel, setActiveModel] = useState<Model | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentComplete, setPaymentComplete] = useState(false);
 
   useEffect(() => {
     loadActiveModel();
@@ -47,6 +50,14 @@ export default function PredictionPage() {
       console.error("Failed to load model:", error);
       toast.error("Failed to load model");
     }
+  };
+
+  // Unified payment modal logic for both chart and page
+  const handleShowPaymentModal = () => setShowPaymentModal((v) => !v);
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    setPaymentComplete(true);
+    toast.success("Payment successful! You can now run your prediction.");
   };
 
   if (!user) {
@@ -74,8 +85,13 @@ export default function PredictionPage() {
         </p>
       </div>
 
-      {/* Interest Rate Chart */}
-      <InterestRateChart />
+      {/* Interest Rate Chart with payment flow enforced */}
+      <InterestRateChart
+        paymentRequired={true}
+        showPaymentModal={showPaymentModal}
+        onShowPaymentModal={handleShowPaymentModal}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
 
       {/* Active Model Info */}
       {activeModel ? (
@@ -102,10 +118,11 @@ export default function PredictionPage() {
                 </span>
               )}
             </div>
-            <div className="text-sm text-secondary-500">
+            <div className="text-sm text-secondary-500 mb-4">
               💡 Use the "Predict Next Rate" button in the chart above to run
               predictions for the upcoming FOMC meeting.
             </div>
+            {/* Optionally, you can remove or disable the Predict button here to avoid duplicate payment logic */}
           </div>
         </div>
       ) : (
