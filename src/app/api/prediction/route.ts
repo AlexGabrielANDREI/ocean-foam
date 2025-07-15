@@ -36,27 +36,56 @@ export async function POST(request: NextRequest) {
 
     let predictionResult: any = null;
     let tempFiles: string[] = [];
+    let modelTempPath: string | undefined = undefined;
 
     try {
-      // Download model file from storage
-      console.log(
-        "Prediction API - Downloading model from path:",
-        model.model_path
-      );
-      const { data: modelData, error: modelDownloadError } =
-        await supabase.storage.from("ml-models").download(model.model_path);
-      if (modelDownloadError || !modelData) {
-        return NextResponse.json(
-          { error: "Failed to download model file" },
-          { status: 500 }
-        );
+      // Model caching logic (store in ./temp instead of OS temp)
+      const tempDir = path.join(process.cwd(), "temp");
+      // Ensure temp directory exists
+      try {
+        const fs = await import("fs/promises");
+        await fs.mkdir(tempDir, { recursive: true });
+      } catch (mkdirErr) {
+        console.error("[Model Cache] Error ensuring temp directory:", mkdirErr);
       }
-      const tempDir = os.tmpdir();
-      const modelTempPath = path.join(tempDir, `model_${Date.now()}.pkl`);
-      await writeFile(
-        modelTempPath,
-        Buffer.from(await modelData.arrayBuffer())
+      const cachedModelPath = path.join(
+        tempDir,
+        `model_${model.model_hash}.pkl`
       );
+      let useCachedModel = false;
+      try {
+        await import("fs/promises").then(async (fs) => {
+          await fs.access(cachedModelPath);
+          useCachedModel = true;
+        });
+      } catch (e) {
+        useCachedModel = false;
+      }
+      modelTempPath = cachedModelPath;
+      if (!useCachedModel) {
+        // Download model file from storage
+        console.log(
+          "[Model Cache] Model not cached, downloading from Supabase"
+        );
+        const { data: modelData, error: modelDownloadError } =
+          await supabase.storage.from("ml-models").download(model.model_path);
+        if (modelDownloadError || !modelData) {
+          return NextResponse.json(
+            { error: "Failed to download model file" },
+            { status: 500 }
+          );
+        }
+        await writeFile(
+          cachedModelPath,
+          Buffer.from(await modelData.arrayBuffer())
+        );
+        console.log(
+          "[Model Cache] Model file written to cache:",
+          cachedModelPath
+        );
+      } else {
+        console.log("[Model Cache] Using cached model file:", cachedModelPath);
+      }
       tempFiles.push(modelTempPath);
 
       if (model.use_manual_features) {
@@ -226,7 +255,14 @@ export async function POST(request: NextRequest) {
         tokens_remaining: 0,
       });
     } finally {
-      // Clean up temp files
+      // Only clean up non-cached temp files (do not delete cached model file)
+      // Remove the cached model file from tempFiles before cleanup
+      if (modelTempPath) {
+        const modelIndex = tempFiles.indexOf(modelTempPath);
+        if (modelIndex !== -1) {
+          tempFiles.splice(modelIndex, 1);
+        }
+      }
       for (const tempFile of tempFiles) {
         try {
           await unlink(tempFile);

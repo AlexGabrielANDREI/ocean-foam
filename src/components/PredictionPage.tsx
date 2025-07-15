@@ -12,6 +12,7 @@ import {
   Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import InterestRateChart from "./InterestRateChart";
 
 interface Model {
   id: string;
@@ -25,8 +26,6 @@ interface Model {
 export default function PredictionPage() {
   const { user } = useAuth();
   const [activeModel, setActiveModel] = useState<Model | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [predictionResult, setPredictionResult] = useState<any>(null);
 
   useEffect(() => {
     loadActiveModel();
@@ -47,31 +46,6 @@ export default function PredictionPage() {
     } catch (error) {
       console.error("Failed to load model:", error);
       toast.error("Failed to load model");
-    }
-  };
-
-  const handleRun = async () => {
-    setLoading(true);
-    setPredictionResult(null);
-    try {
-      const response = await fetch("/api/prediction", {
-        method: "POST",
-        headers: {
-          "x-wallet-address": user!.wallet_address,
-        },
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Prediction failed");
-      }
-      const result = await response.json();
-      setPredictionResult(result.prediction);
-      toast.success("Prediction completed successfully!");
-    } catch (error) {
-      console.error("Prediction error:", error);
-      toast.error(error instanceof Error ? error.message : "Prediction failed");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -99,6 +73,10 @@ export default function PredictionPage() {
           Run predictions using the active machine learning model
         </p>
       </div>
+
+      {/* Interest Rate Chart */}
+      <InterestRateChart />
+
       {/* Active Model Info */}
       {activeModel ? (
         <div className="card">
@@ -124,32 +102,10 @@ export default function PredictionPage() {
                 </span>
               )}
             </div>
-            <button
-              onClick={handleRun}
-              className="btn-primary flex items-center justify-center"
-              disabled={loading}
-            >
-              {loading ? (
-                <span className="flex items-center">
-                  <span className="animate-spin mr-2">⏳</span>Running...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <Play className="w-5 h-5 mr-2" />
-                  Run Prediction
-                </span>
-              )}
-            </button>
-            {predictionResult && (
-              <div className="mt-6 p-4 rounded-xl bg-card border border-border">
-                <h4 className="font-semibold mb-2 text-foreground">
-                  Prediction Result
-                </h4>
-                <pre className="text-sm text-secondary-200 whitespace-pre-wrap">
-                  {JSON.stringify(predictionResult, null, 2)}
-                </pre>
-              </div>
-            )}
+            <div className="text-sm text-secondary-500">
+              💡 Use the "Predict Next Rate" button in the chart above to run
+              predictions for the upcoming FOMC meeting.
+            </div>
           </div>
         </div>
       ) : (

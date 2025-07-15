@@ -12,6 +12,7 @@ import path from "path";
 const execAsync = promisify(exec);
 
 export async function POST(request: NextRequest) {
+  console.log("[DEBUG] Entered POST /api/predict handler");
   try {
     // Authenticate request with wallet
     const authRequest = await authenticateRequest(request);
@@ -33,23 +34,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Download model file from Supabase Storage
-    const modelBlob = await downloadModelFile(model.model_path);
-    if (!modelBlob) {
-      return NextResponse.json(
-        { error: "Failed to download model file" },
-        { status: 500 }
-      );
-    }
-
-    // Save model to temporary file
-    const tempModelPath = path.join(
+    // Use model_hash as cache key
+    const cachedModelPath = path.join(
       process.cwd(),
       "temp",
-      `model_${Date.now()}.pkl`
+      `model_${model.model_hash}.pkl`
     );
-    const modelBuffer = Buffer.from(await modelBlob.arrayBuffer());
-    writeFileSync(tempModelPath, modelBuffer);
+    console.log("[Model Cache] Using cache path:", cachedModelPath);
+    let useCachedModel = false;
+    try {
+      // Check if cached model exists
+      await import("fs/promises").then(async (fs) => {
+        await fs.access(cachedModelPath);
+        useCachedModel = true;
+      });
+    } catch (e) {
+      useCachedModel = false;
+    }
+
+    if (!useCachedModel) {
+      console.log("[DEBUG] Model not cached, downloading from Supabase");
+      // Download model file from Supabase Storage
+      const modelBlob = await downloadModelFile(model.model_path);
+      if (!modelBlob) {
+        return NextResponse.json(
+          { error: "Failed to download model file" },
+          { status: 500 }
+        );
+      }
+      // Ensure temp directory exists
+      try {
+        const fs = await import("fs/promises");
+        await fs.mkdir(path.join(process.cwd(), "temp"), { recursive: true });
+      } catch (mkdirErr) {
+        console.error("[Model Cache] Error ensuring temp directory:", mkdirErr);
+      }
+      // Save model to cache file
+      const modelBuffer = Buffer.from(await modelBlob.arrayBuffer());
+      try {
+        writeFileSync(cachedModelPath, modelBuffer);
+        console.log(
+          "[Model Cache] Model file written to cache:",
+          cachedModelPath
+        );
+      } catch (err) {
+        console.error("[Model Cache] Error writing model file to cache:", err);
+      }
+    }
+
+    // Use the cached model path for prediction
+    const tempModelPath = cachedModelPath;
 
     let predictionResult;
 
@@ -88,8 +122,8 @@ export async function POST(request: NextRequest) {
       predictionResult = JSON.parse(stdout);
     }
 
-    // Clean up model file
-    unlinkSync(tempModelPath);
+    // Clean up model file: REMOVE THIS LINE (do not delete cached model)
+    // unlinkSync(tempModelPath);
 
     // Save prediction to database with wallet-aware client
     const supabaseWithWallet = getWalletAwareSupabase(user.wallet_address);

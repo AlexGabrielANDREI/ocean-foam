@@ -24,36 +24,31 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
 
   const navigationItems = [
     {
-      name: "Dashboard",
-      route: "dashboard",
-      icon: Home,
-      active: currentRoute === "dashboard",
-    },
-    {
       name: "Prediction",
       route: "prediction",
       icon: TrendingUp,
       active: currentRoute === "prediction",
+      comingSoon: false,
     },
     {
-      name: "Analytics",
-      route: "analytics",
+      name: "Exploratory Data Analysis",
+      route: "eda",
       icon: BarChart3,
-      active: currentRoute === "analytics",
+      active: currentRoute === "eda",
       comingSoon: true,
     },
     {
-      name: "Portfolio",
-      route: "portfolio",
-      icon: BarChart3,
-      active: currentRoute === "portfolio",
+      name: "AI Agents",
+      route: "ai-agents",
+      icon: User,
+      active: currentRoute === "ai-agents",
       comingSoon: true,
     },
   ];
 
   const adminItems = [
     {
-      name: "Dashboard",
+      name: "Statistics",
       route: "admin",
       icon: Settings,
       active: currentRoute === "admin",
@@ -69,12 +64,6 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
       route: "admin-users",
       icon: Users,
       active: currentRoute === "admin-users",
-    },
-    {
-      name: "Predictions",
-      route: "admin-predictions",
-      icon: TrendingUp,
-      active: currentRoute === "admin-predictions",
     },
   ];
 

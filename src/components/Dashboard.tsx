@@ -10,7 +10,6 @@ import AdminDashboard from "./AdminDashboard";
 import PredictionPage from "./PredictionPage";
 import AdminModelsPage from "./AdminModelsPage";
 import AdminUsersPage from "./AdminUsersPage";
-import AdminPredictionsPage from "./AdminPredictionsPage";
 import ModelUploadPage from "./ModelUploadPage";
 
 export default function Dashboard() {
@@ -30,8 +29,6 @@ export default function Dashboard() {
       setCurrentRoute("admin-models");
     } else if (pathname === "/admin/users") {
       setCurrentRoute("admin-users");
-    } else if (pathname === "/admin/predictions") {
-      setCurrentRoute("admin-predictions");
     } else if (pathname === "/admin/models/upload") {
       setCurrentRoute("admin-upload");
     } else {
@@ -56,8 +53,6 @@ export default function Dashboard() {
           return "/admin/models";
         case "admin-users":
           return "/admin/users";
-        case "admin-predictions":
-          return "/admin/predictions";
         case "admin-upload":
           return "/admin/models/upload";
         default:
@@ -82,8 +77,6 @@ export default function Dashboard() {
         return <AdminModelsPage onRouteChange={handleRouteChange} />;
       case "admin-users":
         return <AdminUsersPage />;
-      case "admin-predictions":
-        return <AdminPredictionsPage />;
       case "admin-upload":
         return <ModelUploadPage />;
       default:
