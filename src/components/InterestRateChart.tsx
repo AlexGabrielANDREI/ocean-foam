@@ -49,7 +49,8 @@ interface InterestRateChartProps {
   paymentRequired?: boolean;
   showPaymentModal?: boolean;
   onShowPaymentModal?: () => void;
-  onPaymentSuccess?: () => void;
+  onPaymentSuccess?: (transactionHash: string) => void;
+  onRefreshPaymentStatus?: () => void;
 }
 
 export default function InterestRateChart({
@@ -57,6 +58,7 @@ export default function InterestRateChart({
   showPaymentModal,
   onShowPaymentModal,
   onPaymentSuccess,
+  onRefreshPaymentStatus,
 }: InterestRateChartProps) {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<ChartData[]>([]);
@@ -65,11 +67,28 @@ export default function InterestRateChart({
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const [currentTransactionHash, setCurrentTransactionHash] =
+    useState<string>("");
 
   useEffect(() => {
     loadInterestRateData();
     loadActiveModel();
   }, []);
+
+  // Monitor transaction hash changes and run prediction when set
+  useEffect(() => {
+    if (
+      currentTransactionHash &&
+      currentTransactionHash.trim() !== "" &&
+      paymentComplete
+    ) {
+      console.log(
+        "[DEBUG] Transaction hash changed, running prediction:",
+        currentTransactionHash
+      );
+      handleRunPrediction();
+    }
+  }, [currentTransactionHash, paymentComplete]);
 
   const loadInterestRateData = async () => {
     try {
@@ -114,19 +133,51 @@ export default function InterestRateChart({
     setPredictionLoading(true);
     setPredictionResult(null);
     try {
+      console.log("[DEBUG] Running prediction with:", {
+        walletAddress: user!.wallet_address,
+        transactionHash: currentTransactionHash,
+        hasTransactionHash: !!currentTransactionHash,
+        currentTransactionHashLength: currentTransactionHash?.length || 0,
+        paymentComplete,
+        paymentRequired,
+      });
+
+      // Only include transaction hash header if it's not empty
+      const headers: Record<string, string> = {
+        "x-wallet-address": user!.wallet_address,
+      };
+
+      if (currentTransactionHash && currentTransactionHash.trim() !== "") {
+        headers["x-transaction-hash"] = currentTransactionHash;
+        console.log(
+          "[DEBUG] Adding transaction hash to headers:",
+          currentTransactionHash
+        );
+      } else {
+        console.log("[DEBUG] No transaction hash to add to headers");
+      }
+
+      console.log("[DEBUG] Final headers:", headers);
+
       const response = await fetch("/api/prediction", {
         method: "POST",
-        headers: {
-          "x-wallet-address": user!.wallet_address,
-        },
+        headers,
       });
+
+      console.log("[DEBUG] API Response status:", response.status);
+
       if (!response.ok) {
         const error = await response.json();
+        console.log("[DEBUG] API Error response:", error);
         throw new Error(error.error || "Prediction failed");
       }
       const result = await response.json();
+      console.log("[DEBUG] API Success response:", result);
       setPredictionResult(result.prediction);
       toast.success("Prediction completed successfully!");
+
+      // Refresh payment status after successful prediction
+      onRefreshPaymentStatus && onRefreshPaymentStatus();
     } catch (error) {
       console.error("Prediction error:", error);
       toast.error(error instanceof Error ? error.message : "Prediction failed");
@@ -143,10 +194,27 @@ export default function InterestRateChart({
     }
   };
 
-  const handlePaymentSuccessInternal = () => {
+  const handlePaymentSuccessInternal = (transactionHash: string) => {
+    console.log(
+      "[DEBUG] handlePaymentSuccessInternal called with:",
+      transactionHash
+    );
+    console.log("[DEBUG] Transaction hash details:", {
+      hash: transactionHash,
+      length: transactionHash?.length || 0,
+      isString: typeof transactionHash === "string",
+      isEmpty: !transactionHash || transactionHash.trim() === "",
+    });
+
     setPaymentComplete(true);
-    onPaymentSuccess && onPaymentSuccess();
-    handleRunPrediction();
+    setCurrentTransactionHash(transactionHash);
+    console.log("[DEBUG] currentTransactionHash set to:", transactionHash);
+    onPaymentSuccess && onPaymentSuccess(transactionHash);
+
+    // The useEffect will handle running the prediction when currentTransactionHash is set
+    console.log(
+      "[DEBUG] Payment success completed, prediction will run via useEffect"
+    );
   };
 
   const formatDate = (dateString: string) => {

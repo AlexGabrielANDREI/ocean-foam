@@ -4,6 +4,10 @@ import {
   authenticateRequest,
   getWalletAwareSupabase,
 } from "@/lib/auth-middleware";
+import {
+  verifyUserPayment,
+  recordPaymentTransaction,
+} from "@/lib/payment-validation";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFileSync, unlinkSync } from "fs";
@@ -18,7 +22,46 @@ export async function POST(request: NextRequest) {
     const authRequest = await authenticateRequest(request);
     const { user } = authRequest;
 
-    // No need to parse request body
+    // Get transaction hash from headers
+    const transactionHash = request.headers.get("x-transaction-hash");
+
+    // Validate payment and store result
+    let paymentValidation: any = null;
+
+    if (transactionHash) {
+      console.log(
+        "[DEBUG] Validating payment for transaction:",
+        transactionHash
+      );
+      paymentValidation = await verifyUserPayment(
+        user.wallet_address,
+        transactionHash
+      );
+
+      if (!paymentValidation.isValid) {
+        return NextResponse.json(
+          { error: `Payment validation failed: ${paymentValidation.reason}` },
+          { status: 402 }
+        );
+      }
+
+      console.log("[DEBUG] Payment validation successful");
+    } else {
+      // If no transaction hash provided, check for existing valid payment
+      console.log(
+        "[DEBUG] No transaction hash provided, checking for existing payment"
+      );
+      paymentValidation = await verifyUserPayment(user.wallet_address);
+
+      if (!paymentValidation.isValid) {
+        return NextResponse.json(
+          { error: `Payment required: ${paymentValidation.reason}` },
+          { status: 402 }
+        );
+      }
+
+      console.log("[DEBUG] Existing payment validation successful");
+    }
 
     // Find the single active model
     const { data: model, error: modelError } = await supabase
@@ -125,7 +168,7 @@ export async function POST(request: NextRequest) {
     // Clean up model file: REMOVE THIS LINE (do not delete cached model)
     // unlinkSync(tempModelPath);
 
-    // Save prediction to database with wallet-aware client
+    // Save prediction to database with validated transaction hash
     const supabaseWithWallet = getWalletAwareSupabase(user.wallet_address);
     const { data: prediction, error: predictionError } =
       await supabaseWithWallet
@@ -137,7 +180,7 @@ export async function POST(request: NextRequest) {
           prediction_score: predictionResult.confidence,
           features_used: model.use_manual_features ? "manual" : "api",
           features_data: null,
-          transaction_hash: null,
+          transaction_hash: paymentValidation.transactionHash, // Use validated transaction hash
         })
         .select()
         .single();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Upload,
@@ -14,6 +14,9 @@ import {
 import toast from "react-hot-toast";
 import InterestRateChart from "./InterestRateChart";
 import PaymentModal from "./PaymentModal";
+import PaymentStatusIndicator, {
+  PaymentStatusIndicatorRef,
+} from "./PaymentStatusIndicator";
 
 interface Model {
   id: string;
@@ -29,6 +32,10 @@ export default function PredictionPage() {
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const [currentTransactionHash, setCurrentTransactionHash] =
+    useState<string>("");
+
+  const paymentStatusRef = useRef<PaymentStatusIndicatorRef>(null);
 
   useEffect(() => {
     loadActiveModel();
@@ -54,10 +61,16 @@ export default function PredictionPage() {
 
   // Unified payment modal logic for both chart and page
   const handleShowPaymentModal = () => setShowPaymentModal((v) => !v);
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (transactionHash: string) => {
     setShowPaymentModal(false);
     setPaymentComplete(true);
+    setCurrentTransactionHash(transactionHash);
     toast.success("Payment successful! You can now run your prediction.");
+
+    // Refresh payment status after successful payment
+    setTimeout(() => {
+      paymentStatusRef.current?.refresh();
+    }, 1000); // Small delay to ensure the prediction is saved first
   };
 
   if (!user) {
@@ -85,12 +98,16 @@ export default function PredictionPage() {
         </p>
       </div>
 
+      {/* Payment Status Indicator */}
+      <PaymentStatusIndicator ref={paymentStatusRef} />
+
       {/* Interest Rate Chart with payment flow enforced */}
       <InterestRateChart
         paymentRequired={true}
         showPaymentModal={showPaymentModal}
         onShowPaymentModal={handleShowPaymentModal}
         onPaymentSuccess={handlePaymentSuccess}
+        onRefreshPaymentStatus={() => paymentStatusRef.current?.refresh()}
       />
 
       {/* Active Model Info */}

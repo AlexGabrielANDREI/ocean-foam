@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { getPaymentPrice, makePayment } from "@/lib/contract";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import { getPaymentPrice, makePayment } from "@/lib/contract";
 
 interface PaymentModalProps {
   open: boolean;
   onClose: () => void;
-  onPaid: () => void;
+  onPaid: (transactionHash: string) => void;
 }
 
 export default function PaymentModal({
@@ -17,18 +17,51 @@ export default function PaymentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [txHash, setTxHash] = useState<string>("");
+  const [ethUsdPrice, setEthUsdPrice] = useState<number | null>(null);
+  const [usdAmount, setUsdAmount] = useState<string>("");
+
+  // Fetch ETH to USD price
+  const fetchEthPrice = async () => {
+    try {
+      const response = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+      );
+      const data = await response.json();
+      const ethPrice = data.ethereum.usd;
+      setEthUsdPrice(ethPrice);
+
+      // Calculate USD amount if we have both ETH price and contract price
+      if (price && ethPrice) {
+        const ethAmount = parseFloat(price);
+        const usdValue = (ethAmount * ethPrice).toFixed(2);
+        setUsdAmount(usdValue);
+      }
+    } catch (error) {
+      console.error("Failed to fetch ETH price:", error);
+    }
+  };
 
   useEffect(() => {
     if (open) {
       setError("");
       setTxHash("");
       setLoading(true);
-      getPaymentPrice()
-        .then(setPrice)
+
+      // Fetch both contract price and ETH price
+      Promise.all([getPaymentPrice().then(setPrice), fetchEthPrice()])
         .catch(() => setError("Failed to fetch price from contract."))
         .finally(() => setLoading(false));
     }
   }, [open]);
+
+  // Update USD amount when price changes
+  useEffect(() => {
+    if (price && ethUsdPrice) {
+      const ethAmount = parseFloat(price);
+      const usdValue = (ethAmount * ethUsdPrice).toFixed(2);
+      setUsdAmount(usdValue);
+    }
+  }, [price, ethUsdPrice]);
 
   const handlePay = async () => {
     setError("");
@@ -39,10 +72,17 @@ export default function PaymentModal({
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const tx = await makePayment(signer, price);
+      console.log("[DEBUG] Payment transaction created:", tx.hash);
       setTxHash(tx.hash);
       await tx.wait();
-      onPaid();
+      console.log(
+        "[DEBUG] Payment transaction confirmed, calling onPaid with:",
+        tx.hash
+      );
+      // Pass transaction hash to parent component
+      onPaid(tx.hash);
     } catch (err: any) {
+      console.error("[DEBUG] Payment failed:", err);
       setError(err.message || "Payment failed");
     } finally {
       setLoading(false);
@@ -76,9 +116,26 @@ export default function PaymentModal({
           <>
             <div className="mb-4">
               <span className="font-semibold text-lg">Amount:</span>
-              <span className="ml-2 text-primary-500 font-mono">
-                {price} ETH
-              </span>
+              <div className="mt-1">
+                <span className="text-primary-500 font-mono text-lg">
+                  {price} ETH
+                </span>
+                {usdAmount && (
+                  <span className="ml-2 text-secondary-600 text-sm">
+                    (≈ ${usdAmount} USD)
+                  </span>
+                )}
+              </div>
+              {!usdAmount && ethUsdPrice === null && (
+                <div className="text-xs text-secondary-500 mt-1">
+                  Loading USD conversion...
+                </div>
+              )}
+              {ethUsdPrice && (
+                <div className="text-xs text-secondary-500 mt-1">
+                  Current ETH price: ${ethUsdPrice.toLocaleString()} USD
+                </div>
+              )}
             </div>
             {txHash && (
               <div className="mb-2 text-green-500 text-sm">

@@ -35,30 +35,112 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkWalletConnection = async () => {
       try {
-        // Check if user has a stored session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.user) {
-          // Fetch user data from our users table
-          const { data: userData } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
+        console.log("[DEBUG] Checking for existing wallet connection...");
 
-          if (userData) {
-            setUser(userData);
-            setIsAdmin(userData.role === "admin");
+        // Check if we have a stored wallet address
+        const storedWalletAddress = localStorage.getItem("wallet_address");
+
+        if (storedWalletAddress) {
+          console.log(
+            "[DEBUG] Found stored wallet address:",
+            storedWalletAddress
+          );
+
+          // Check if MetaMask is connected and the address matches
+          if (window.ethereum) {
+            try {
+              const accounts = await window.ethereum.request({
+                method: "eth_accounts",
+              });
+              if (
+                accounts.length > 0 &&
+                accounts[0].toLowerCase() === storedWalletAddress.toLowerCase()
+              ) {
+                console.log(
+                  "[DEBUG] MetaMask is connected with matching address"
+                );
+
+                // Fetch user data from our users table
+                const { data: userData, error: userError } = await supabase
+                  .from("users")
+                  .select("*")
+                  .eq("wallet_address", storedWalletAddress)
+                  .single();
+
+                if (userData) {
+                  console.log("[DEBUG] Found user in database:", userData.id);
+                  setUser(userData);
+                  setIsAdmin(userData.role === "admin");
+                  setWallet({
+                    address: userData.wallet_address,
+                    type: userData.wallet_type,
+                    connected: true,
+                  });
+                } else {
+                  console.log(
+                    "[DEBUG] User not found in database for stored wallet"
+                  );
+                  // Clear invalid stored wallet
+                  localStorage.removeItem("wallet_address");
+                  setUser(null);
+                  setWallet({
+                    address: "",
+                    type: "metamask",
+                    connected: false,
+                  });
+                }
+              } else {
+                console.log(
+                  "[DEBUG] MetaMask connected but address doesn't match stored address"
+                );
+                // Clear stored wallet as it's no longer valid
+                localStorage.removeItem("wallet_address");
+                setUser(null);
+                setWallet({
+                  address: "",
+                  type: "metamask",
+                  connected: false,
+                });
+              }
+            } catch (error) {
+              console.log("[DEBUG] Error checking MetaMask connection:", error);
+              // Clear stored wallet on error
+              localStorage.removeItem("wallet_address");
+              setUser(null);
+              setWallet({
+                address: "",
+                type: "metamask",
+                connected: false,
+              });
+            }
+          } else {
+            console.log("[DEBUG] MetaMask not available");
+            // Clear stored wallet if MetaMask is not available
+            localStorage.removeItem("wallet_address");
+            setUser(null);
             setWallet({
-              address: userData.wallet_address,
-              type: userData.wallet_type,
-              connected: true,
+              address: "",
+              type: "metamask",
+              connected: false,
             });
           }
+        } else {
+          console.log("[DEBUG] No stored wallet address found");
+          setUser(null);
+          setWallet({
+            address: "",
+            type: "metamask",
+            connected: false,
+          });
         }
       } catch (error) {
         console.error("Error checking wallet connection:", error);
+        setUser(null);
+        setWallet({
+          address: "",
+          type: "metamask",
+          connected: false,
+        });
       } finally {
         setLoading(false);
       }
@@ -78,19 +160,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         walletConnection = await connectHedera();
       }
 
+      console.log("[DEBUG] Wallet connected:", walletConnection.address);
+
+      // Store wallet address in localStorage for persistence
+      localStorage.setItem("wallet_address", walletConnection.address);
+
       // Create or get user in Supabase with wallet headers
       const supabaseWithWallet = getSupabaseClient(walletConnection.address);
-      const { data: existingUser } = await supabaseWithWallet
-        .from("users")
-        .select("*")
-        .eq("wallet_address", walletConnection.address)
-        .single();
+      const { data: existingUser, error: existingError } =
+        await supabaseWithWallet
+          .from("users")
+          .select("*")
+          .eq("wallet_address", walletConnection.address)
+          .single();
 
       if (existingUser) {
+        console.log("[DEBUG] Found existing user:", existingUser.id);
         setUser(existingUser);
         setIsAdmin(existingUser.role === "admin");
         toast.success("Wallet connected successfully!");
       } else {
+        console.log(
+          "[DEBUG] Creating new user for wallet:",
+          walletConnection.address
+        );
         // Create new user
         const { data: newUser, error } = await supabaseWithWallet
           .from("users")
@@ -103,9 +196,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
 
         if (error) {
+          console.error("[DEBUG] Error creating user:", error);
           throw error;
         }
 
+        console.log("[DEBUG] New user created:", newUser.id);
         setUser(newUser);
         setIsAdmin(false);
         toast.success("New account created and wallet connected!");
@@ -121,6 +216,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const disconnect = () => {
+    console.log("[DEBUG] Disconnecting wallet");
+    localStorage.removeItem("wallet_address");
     setWallet(disconnectWallet());
     setUser(null);
     setIsAdmin(false);

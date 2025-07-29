@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyUserPayment } from "@/lib/payment-validation";
 import { spawn } from "child_process";
 import { writeFile, unlink } from "fs/promises";
 import path from "path";
@@ -13,14 +14,49 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   try {
     const walletAddress = request.headers.get("x-wallet-address");
+    const transactionHash = request.headers.get("x-transaction-hash");
+
+    console.log("[DEBUG] API received request:", {
+      walletAddress,
+      transactionHash,
+      hasTransactionHash: !!transactionHash && transactionHash.trim() !== "",
+      allHeaders: Object.fromEntries(request.headers.entries()),
+    });
+
     if (!walletAddress) {
+      console.log("[DEBUG] No wallet address provided");
       return NextResponse.json(
         { error: "Wallet address required" },
         { status: 401 }
       );
     }
 
+    // Validate payment - only pass transaction hash if it's not empty
+    console.log("[DEBUG] Validating payment for wallet:", walletAddress);
+    const paymentValidation = await verifyUserPayment(
+      walletAddress,
+      transactionHash && transactionHash.trim() !== ""
+        ? transactionHash
+        : undefined
+    );
+
+    console.log("[DEBUG] Payment validation result:", paymentValidation);
+
+    if (!paymentValidation.isValid) {
+      console.log(
+        "[DEBUG] Payment validation failed:",
+        paymentValidation.reason
+      );
+      return NextResponse.json(
+        { error: `Payment required: ${paymentValidation.reason}` },
+        { status: 402 }
+      );
+    }
+
+    console.log("[DEBUG] Payment validation successful");
+
     // Find the single active model
+    console.log("[DEBUG] Looking for active model...");
     const { data: model, error: modelError } = await supabase
       .from("models")
       .select("*")
@@ -28,11 +64,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (modelError || !model) {
+      console.error("[DEBUG] Model lookup error:", modelError);
+      console.error("[DEBUG] No active model found");
       return NextResponse.json(
         { error: "No active model found" },
         { status: 404 }
       );
     }
+
+    console.log("[DEBUG] Active model found:", {
+      id: model.id,
+      name: model.name,
+      is_active: model.is_active,
+      use_manual_features: model.use_manual_features,
+    });
 
     let predictionResult: any = null;
     let tempFiles: string[] = [];
@@ -202,6 +247,8 @@ export async function POST(request: NextRequest) {
         hasProbabilities: !!predictionResult.probabilities,
         predictionType: typeof predictionResult.prediction,
         confidenceType: typeof predictionResult.confidence,
+        predictionValue: predictionResult.prediction,
+        confidenceValue: predictionResult.confidence,
       });
 
       // Look up user by wallet address
@@ -219,7 +266,7 @@ export async function POST(request: NextRequest) {
 
       console.log("User found:", { userId: user.id, walletAddress });
 
-      // Log prediction
+      // Log prediction with transaction hash
       console.log("Inserting prediction with data:", {
         user_id: user.id,
         model_id: model.id,
@@ -227,18 +274,33 @@ export async function POST(request: NextRequest) {
         prediction_score: predictionResult.confidence,
         features_used: model.use_manual_features ? "manual" : "api",
         features_data: predictionResult.probabilities,
-        transaction_hash: null,
+        transaction_hash: paymentValidation.transactionHash, // Use validated transaction hash
       });
 
-      const { error: insertError } = await supabase.from("predictions").insert({
-        user_id: user.id,
-        model_id: model.id,
-        prediction_result: predictionResult.prediction, // string
-        prediction_score: predictionResult.confidence, // number
-        features_used: model.use_manual_features ? "manual" : "api",
-        features_data: predictionResult.probabilities, // or null
-        transaction_hash: null,
-      });
+      // Use wallet-specific client for prediction insertion to pass RLS policies
+      const supabaseWithWallet = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          global: {
+            headers: {
+              "x-wallet-address": walletAddress,
+            },
+          },
+        }
+      );
+
+      const { error: insertError } = await supabaseWithWallet
+        .from("predictions")
+        .insert({
+          user_id: user.id,
+          model_id: model.id,
+          prediction_result: predictionResult.prediction, // string
+          prediction_score: predictionResult.confidence, // number
+          features_used: model.use_manual_features ? "manual" : "api",
+          features_data: predictionResult.probabilities, // or null
+          transaction_hash: paymentValidation.transactionHash, // Store the validated transaction hash
+        });
       if (insertError) {
         console.error("Insert prediction error:", insertError);
         return NextResponse.json(
