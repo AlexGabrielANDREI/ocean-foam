@@ -2,18 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom CSS Variables - Muted Professional Colors */
+/* Import Sharp Sans Font */
+@import url("https://fonts.googleapis.com/css2?family=Sharp+Sans:wght@300;400;500;600;700;800;900&display=swap");
+
+/* Custom CSS Variables - New Color Palette */
 :root {
-  --primary-500: #3b82f6;
-  --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
-  --secondary-500: #6366f1;
-  --secondary-600: #4f46e5;
-  --secondary-700: #4338ca;
-  --accent-green: #059669;
-  --accent-orange: #d97706;
-  --accent-pink: #be185d;
-  --accent-yellow: #ca8a04;
+  --primary-500: #19baa8;
+  --primary-600: #17a99a;
+  --primary-700: #15988c;
+  --secondary-500: #783376;
+  --secondary-600: #6a2d68;
+  --secondary-700: #5c275a;
+  --accent-green: #19baa8;
+  --accent-teal: #19baa8;
+  --accent-pink: #e04288;
+  --accent-blue: #024b86;
+  --accent-purple: #783376;
 }
 
 /* Base Styles */
@@ -22,9 +26,9 @@
 }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+  font-family: "Sharp Sans", "Inter", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans",
+    "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #0f172a;
@@ -45,22 +49,22 @@ body {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
 }
 
-/* Glow Effects - More Subtle */
+/* Glow Effects - Updated Colors */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 20px rgba(25, 186, 168, 0.15);
 }
 
 .glow-secondary {
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 20px rgba(120, 51, 118, 0.15);
 }
 
 .glow-accent {
-  box-shadow: 0 0 20px rgba(5, 150, 105, 0.15);
+  box-shadow: 0 0 20px rgba(224, 66, 136, 0.15);
 }
 
-/* Gradient Text - More Subtle */
+/* Gradient Text - Updated Colors */
 .gradient-text {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #19baa8, #024b86);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -72,31 +76,31 @@ body {
 }
 
 .nav-item.active {
-  @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white glow-primary;
+  @apply bg-gradient-to-r from-teal-500 to-blue-500 text-white glow-primary;
 }
 
 .nav-item:hover {
   @apply transform scale-105;
 }
 
-/* Button Styles - More Subtle */
+/* Button Styles - Updated Colors */
 .btn-primary {
-  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-primary hover:scale-105;
+  @apply bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-primary hover:scale-105;
 }
 
 .btn-secondary {
-  @apply bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-secondary hover:scale-105;
+  @apply bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-secondary hover:scale-105;
 }
 
 .btn-accent {
-  @apply bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-accent hover:scale-105;
+  @apply bg-gradient-to-r from-pink-500 to-pink-600 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 glow-accent hover:scale-105;
 }
 
 .btn-accent:hover {
   background: linear-gradient(
     to right,
-    rgba(5, 150, 105, 0.8),
-    rgba(16, 185, 129, 0.8)
+    rgba(25, 186, 168, 0.8),
+    rgba(23, 169, 154, 0.8)
   );
 }
 
@@ -122,8 +126,8 @@ body {
 
 .input-field:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #19baa8;
+  box-shadow: 0 0 0 3px rgba(25, 186, 168, 0.1);
 }
 
 /* Loading Animation */
@@ -169,7 +173,7 @@ body {
   animation: bounce 1s infinite;
 }
 
-/* Scrollbar Styling - More Subtle */
+/* Scrollbar Styling - Updated Colors */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -180,23 +184,23 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #19baa8, #024b86);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: linear-gradient(135deg, #17a99a, #024280);
 }
 
 /* Focus Styles */
 *:focus {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #19baa8;
   outline-offset: 2px;
 }
 
 /* Selection Styles */
 ::selection {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(25, 186, 168, 0.2);
   color: white;
 }
 
@@ -258,16 +262,16 @@ body {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
-/* Text Gradients - More Subtle */
+/* Text Gradients - Updated Colors */
 .text-gradient-primary {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #19baa8, #024b86);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .text-gradient-accent {
-  background: linear-gradient(135deg, #059669, #d97706);
+  background: linear-gradient(135deg, #e04288, #783376);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

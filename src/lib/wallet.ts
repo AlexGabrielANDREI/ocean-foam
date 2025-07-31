@@ -8,6 +8,10 @@ export interface WalletConnection {
 
 // MetaMask connection
 export async function connectMetaMask(): Promise<WalletConnection> {
+  if (typeof window === "undefined") {
+    throw new Error("Cannot connect wallet on server side");
+  }
+
   if (typeof window.ethereum === "undefined") {
     throw new Error("MetaMask is not installed");
   }
@@ -45,7 +49,9 @@ export function disconnectWallet(): WalletConnection {
 
 // Check if MetaMask is installed
 export function isMetaMaskInstalled(): boolean {
-  return typeof window.ethereum !== "undefined";
+  return (
+    typeof window !== "undefined" && typeof window.ethereum !== "undefined"
+  );
 }
 
 // Check if Hedera wallet is available (placeholder)

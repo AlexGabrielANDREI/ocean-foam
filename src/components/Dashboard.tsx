@@ -10,6 +10,7 @@ import AdminDashboard from "./AdminDashboard";
 import PredictionPage from "./PredictionPage";
 import AdminModelsPage from "./AdminModelsPage";
 import AdminUsersPage from "./AdminUsersPage";
+import AdminPredictionsPage from "./AdminPredictionsPage";
 import ModelUploadPage from "./ModelUploadPage";
 
 export default function Dashboard() {
@@ -29,6 +30,8 @@ export default function Dashboard() {
       setCurrentRoute("admin-models");
     } else if (pathname === "/admin/users") {
       setCurrentRoute("admin-users");
+    } else if (pathname === "/admin/predictions") {
+      setCurrentRoute("admin-predictions");
     } else if (pathname === "/admin/models/upload") {
       setCurrentRoute("admin-upload");
     } else {
@@ -53,6 +56,8 @@ export default function Dashboard() {
           return "/admin/models";
         case "admin-users":
           return "/admin/users";
+        case "admin-predictions":
+          return "/admin/predictions";
         case "admin-upload":
           return "/admin/models/upload";
         default:
@@ -77,6 +82,8 @@ export default function Dashboard() {
         return <AdminModelsPage onRouteChange={handleRouteChange} />;
       case "admin-users":
         return <AdminUsersPage />;
+      case "admin-predictions":
+        return <AdminPredictionsPage />;
       case "admin-upload":
         return <ModelUploadPage />;
       default:
@@ -85,12 +92,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden dark-bg">
+    <div className="h-screen flex overflow-hidden bg-gray-50">
       <Sidebar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
       <div className="flex-1 flex flex-col min-h-0">
         <TopNavigation />
         <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          <div className="rounded-3xl p-6 lg:p-8 h-full">{renderContent()}</div>
+          <div className="rounded-3xl p-6 lg:p-8 bg-white shadow-sm">
+            {renderContent()}
+          </div>
         </main>
       </div>
     </div>

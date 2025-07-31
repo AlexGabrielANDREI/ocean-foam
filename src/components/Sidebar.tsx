@@ -13,6 +13,7 @@ import {
   User,
   Sparkles,
 } from "lucide-react";
+import Image from "next/image";
 
 interface SidebarProps {
   currentRoute: string;
@@ -75,16 +76,17 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
   };
 
   return (
-    <aside className="w-80 h-full flex flex-col glass border-r border-border">
+    <aside className="w-80 h-full flex flex-col bg-white border-r border-gray-200 shadow-sm">
       {/* Header */}
-      <div className="p-6 border-b border-border flex-shrink-0">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-2xl flex items-center justify-center glow-primary">
-            <Sparkles className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold gradient-text">Prediction</h1>
-            <p className="text-xs text-secondary-400">AI Platform</p>
+      <div className="p-8 border-b  flex-shrink-0">
+        <div className="flex flex-col items-center">
+          <div className="w-40 flex items-center justify-center">
+            <Image
+              src="/logo_oceanfoam.png"
+              alt="OceanFoam Logo"
+              width={120}
+              height={120}
+            />
           </div>
         </div>
       </div>
@@ -96,15 +98,17 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
             <button
               key={item.name}
               onClick={() => handleItemClick(item)}
-              className={`nav-item w-full text-left ${
-                item.active ? "active" : ""
+              className={`w-full text-left flex items-center px-4 py-3 rounded-xl transition-all duration-200 ${
+                item.active
+                  ? "bg-teal-50 text-teal-700 border border-teal-200"
+                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
               } ${item.comingSoon ? "opacity-50 cursor-not-allowed" : ""}`}
               disabled={item.comingSoon}
             >
               <item.icon className="w-6 h-6 mr-4" />
               <span className="text-lg">{item.name}</span>
               {item.comingSoon && (
-                <span className="ml-auto text-xs bg-accent-yellow text-black px-3 py-1 rounded-full font-semibold">
+                <span className="ml-auto text-xs bg-teal-400 text-white px-3 py-1 rounded-full font-semibold">
                   Soon
                 </span>
               )}
@@ -115,7 +119,7 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
         {isAdmin && (
           <>
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-accent-green uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-teal-600 uppercase tracking-wider">
                 Admin Panel
               </h3>
             </div>
@@ -124,8 +128,10 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
                 <button
                   key={item.name}
                   onClick={() => handleItemClick(item)}
-                  className={`nav-item w-full text-left ${
-                    item.active ? "active" : ""
+                  className={`w-full text-left flex items-center px-4 py-3 rounded-xl transition-all duration-200 ${
+                    item.active
+                      ? "bg-teal-50 text-teal-700 border border-teal-200"
+                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
                   <item.icon className="w-6 h-6 mr-4" />

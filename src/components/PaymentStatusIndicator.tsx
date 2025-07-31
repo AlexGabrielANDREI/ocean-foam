@@ -82,12 +82,10 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
 
     if (loading) {
       return (
-        <div className="card p-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <div className="flex items-center space-x-2">
-            <div className="animate-spin w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"></div>
-            <span className="text-secondary-600">
-              Checking payment status...
-            </span>
+            <div className="animate-spin w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full"></div>
+            <span className="text-sm text-gray-600">Checking payment...</span>
           </div>
         </div>
       );
@@ -125,63 +123,46 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
     };
 
     return (
-      <div className="card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm min-w-[280px]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center space-x-2">
             {paymentStatus.hasValidPayment ? (
-              <CheckCircle className="w-5 h-5 text-green-500" />
+              <CheckCircle className="w-4 h-4 text-teal-500" />
             ) : (
-              <XCircle className="w-5 h-5 text-red-500" />
+              <XCircle className="w-4 h-4 text-blue-500" />
             )}
-
-            <div>
-              <h3 className="font-semibold text-foreground">Payment Status</h3>
-              <p className="text-sm text-secondary-600">
-                {paymentStatus.hasValidPayment
-                  ? "Valid payment found"
-                  : "No valid payment"}
-              </p>
-            </div>
+            <span className="text-sm font-medium text-gray-900">
+              {paymentStatus.hasValidPayment
+                ? "Payment Active"
+                : "Payment Required"}
+            </span>
           </div>
-
-          {paymentStatus.hasValidPayment && paymentStatus.expiresAt && (
-            <div className="text-right">
-              <div className="flex items-center space-x-1 text-sm text-secondary-600">
-                <Clock className="w-4 h-4" />
-                <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
-              </div>
-              <div className="text-xs text-secondary-500">
-                Paid: {formatDate(paymentStatus.lastPaymentTime!)}
-              </div>
-            </div>
-          )}
         </div>
 
+        {paymentStatus.hasValidPayment && paymentStatus.expiresAt && (
+          <div className="flex items-center space-x-1 text-xs text-gray-600 mb-2">
+            <Clock className="w-3 h-3" />
+            <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
+          </div>
+        )}
+
         {paymentStatus.transactionHash && (
-          <div className="mt-3 p-2 bg-secondary-50 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-secondary-500" />
-              <span className="text-xs text-secondary-600">Transaction:</span>
-              <a
-                href={`https://sepolia.etherscan.io/tx/${paymentStatus.transactionHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary-500 hover:underline font-mono"
-              >
-                {paymentStatus.transactionHash.slice(0, 10)}...
-              </a>
-            </div>
+          <div className="text-xs text-gray-500 mb-2">
+            <a
+              href={`https://sepolia.etherscan.io/tx/${paymentStatus.transactionHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-600 hover:underline font-mono"
+            >
+              {paymentStatus.transactionHash.slice(0, 8)}...
+              {paymentStatus.transactionHash.slice(-6)}
+            </a>
           </div>
         )}
 
         {!paymentStatus.hasValidPayment && (
-          <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-yellow-600" />
-              <span className="text-sm text-yellow-800">
-                Payment required to run predictions
-              </span>
-            </div>
+          <div className="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+            Payment required to run predictions
           </div>
         )}
       </div>

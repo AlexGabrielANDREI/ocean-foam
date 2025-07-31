@@ -9,6 +9,7 @@ import {
 } from "@/lib/wallet";
 import { supabase, getSupabaseClient } from "@/lib/supabase";
 import toast from "react-hot-toast";
+import { useHydration } from "@/hooks/useHydration";
 
 interface AuthContextType {
   wallet: WalletConnection;
@@ -22,6 +23,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const isHydrated = useHydration();
   const [wallet, setWallet] = useState<WalletConnection>({
     address: "",
     type: "metamask",
@@ -33,8 +35,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing wallet connection on mount
   useEffect(() => {
+    if (!isHydrated) {
+      setLoading(true);
+      return;
+    }
+
     const checkWalletConnection = async () => {
       try {
+        // Check if we're in the browser environment
+        if (typeof window === "undefined") {
+          setLoading(false);
+          return;
+        }
+
         console.log("[DEBUG] Checking for existing wallet connection...");
 
         // Check if we have a stored wallet address
@@ -147,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     checkWalletConnection();
-  }, []);
+  }, [isHydrated]);
 
   const connectWallet = async (type: "metamask" | "hedera") => {
     try {
@@ -229,7 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         wallet,
         user,
-        loading,
+        loading: !isHydrated || loading,
         connectWallet,
         disconnect,
         isAdmin,

@@ -34,12 +34,40 @@ export default function PredictionPage() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [currentTransactionHash, setCurrentTransactionHash] =
     useState<string>("");
+  const [paymentRequired, setPaymentRequired] = useState(true);
 
   const paymentStatusRef = useRef<PaymentStatusIndicatorRef>(null);
 
   useEffect(() => {
     loadActiveModel();
+    checkPaymentStatus();
   }, []);
+
+  const checkPaymentStatus = async () => {
+    try {
+      const response = await fetch("/api/payment/status", {
+        headers: {
+          "x-wallet-address": user!.wallet_address,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const hasValidPayment = data.paymentStatus.hasValidPayment;
+        setPaymentRequired(!hasValidPayment);
+        console.log("[DEBUG] Payment status check:", {
+          hasValidPayment,
+          paymentRequired: !hasValidPayment,
+        });
+      } else {
+        console.error("Failed to check payment status");
+        setPaymentRequired(true); // Default to requiring payment if check fails
+      }
+    } catch (error) {
+      console.error("Payment status check error:", error);
+      setPaymentRequired(true); // Default to requiring payment if check fails
+    }
+  };
 
   const loadActiveModel = async () => {
     try {
@@ -65,11 +93,13 @@ export default function PredictionPage() {
     setShowPaymentModal(false);
     setPaymentComplete(true);
     setCurrentTransactionHash(transactionHash);
+    setPaymentRequired(false); // User now has valid payment
     toast.success("Payment successful! You can now run your prediction.");
 
     // Refresh payment status after successful payment
     setTimeout(() => {
       paymentStatusRef.current?.refresh();
+      checkPaymentStatus(); // Also update our local payment status
     }, 1000); // Small delay to ensure the prediction is saved first
   };
 
@@ -90,52 +120,86 @@ export default function PredictionPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">AI Predictions</h1>
-        <p className="text-secondary-600">
-          Run predictions using the active machine learning model
-        </p>
+      {/* Header with Payment Status */}
+      <div className="relative">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            FOMC Interest Prediction and Analytics
+          </h1>
+
+          <div className="max-w-3xl mx-auto space-y-3">
+            <p className="text-xl text-gray-700 font-medium leading-relaxed">
+              A data-driven dApp for forecasting Federal Reserve interest rate
+              decisions and market reactions.
+            </p>
+            <p className="text-gray-600 leading-relaxed">
+              Predicts FOMC interest rate moves using historical data and
+              financial indicators.
+              <span className="font-semibold text-gray-700">
+                {" "}
+                Useful for traders, researchers, and data scientists.
+              </span>
+            </p>
+          </div>
+
+          <div className="flex items-center justify-center gap-4 mt-6 text-sm text-gray-500">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+              <span>Real-time Data</span>
+            </div>
+            <div className="w-px h-4 bg-gray-300"></div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span>ML-Powered</span>
+            </div>
+            <div className="w-px h-4 bg-gray-300"></div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+              <span>Blockchain Verified</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Payment Status Indicator - Top Right */}
+        <div className="absolute top-0 right-0">
+          <PaymentStatusIndicator ref={paymentStatusRef} />
+        </div>
       </div>
 
-      {/* Payment Status Indicator */}
-      <PaymentStatusIndicator ref={paymentStatusRef} />
-
-      {/* Interest Rate Chart with payment flow enforced */}
+      {/* Interest Rate Chart with dynamic payment requirement */}
       <InterestRateChart
-        paymentRequired={true}
+        paymentRequired={paymentRequired}
         showPaymentModal={showPaymentModal}
         onShowPaymentModal={handleShowPaymentModal}
         onPaymentSuccess={handlePaymentSuccess}
-        onRefreshPaymentStatus={() => paymentStatusRef.current?.refresh()}
+        onRefreshPaymentStatus={() => {
+          paymentStatusRef.current?.refresh();
+          checkPaymentStatus(); // Also update our local payment status
+        }}
       />
 
       {/* Active Model Info */}
       {activeModel ? (
         <div className="card">
           <div className="card-header">
-            <h2 className="text-lg font-semibold text-foreground">
-              Active Model
-            </h2>
+            <h2 className="text-lg font-semibold text-white">Active Model</h2>
           </div>
           <div className="card-body">
             <div className="mb-4">
-              <h3 className="font-medium text-foreground text-xl">
+              <h3 className="font-medium text-white text-xl">
                 {activeModel.name}
               </h3>
-              <p className="text-secondary-600 mb-2">
-                {activeModel.description}
-              </p>
-              <span className="bg-secondary-100 text-secondary-700 px-2 py-1 rounded text-sm mr-2">
+              <p className="text-teal-200 mb-2">{activeModel.description}</p>
+              <span className="bg-teal-100 text-teal-700 px-2 py-1 rounded text-sm mr-2">
                 v{activeModel.version}
               </span>
               {activeModel.use_manual_features && (
-                <span className="bg-accent-yellow text-black px-2 py-1 rounded text-xs font-semibold">
+                <span className="bg-teal-400 text-white px-2 py-1 rounded text-xs font-semibold">
                   Uses Manual Features
                 </span>
               )}
             </div>
-            <div className="text-sm text-secondary-500 mb-4">
+            <div className="text-sm text-teal-300 mb-4">
               💡 Use the "Predict Next Rate" button in the chart above to run
               predictions for the upcoming FOMC meeting.
             </div>
@@ -144,8 +208,8 @@ export default function PredictionPage() {
         </div>
       ) : (
         <div className="text-center py-8">
-          <Database className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
-          <p className="text-secondary-600">No active model available</p>
+          <Database className="w-12 h-12 text-teal-400 mx-auto mb-4" />
+          <p className="text-teal-200">No active model available</p>
         </div>
       )}
     </div>

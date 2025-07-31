@@ -17,7 +17,7 @@ export default function DashboardContent({
       title: "Prediction",
       description: "Make AI-powered predictions using our advanced models",
       icon: TrendingUp,
-      color: "from-primary-500 to-primary-600",
+      color: "from-teal-500 to-teal-600",
       glow: "glow-primary",
       available: true,
       route: "prediction",
@@ -26,7 +26,7 @@ export default function DashboardContent({
       title: "Exploratory Data Analysis",
       description: "Analyze and visualize your data with AI assistance",
       icon: BarChart3,
-      color: "from-secondary-500 to-secondary-600",
+      color: "from-purple-500 to-purple-600",
       glow: "glow-secondary",
       available: false,
       comingSoon: true,
@@ -35,7 +35,7 @@ export default function DashboardContent({
       title: "AI Agents",
       description: "Deploy intelligent agents for automated tasks",
       icon: Bot,
-      color: "from-accent-green to-accent-orange",
+      color: "from-teal-500 to-blue-500",
       glow: "glow-accent",
       available: false,
       comingSoon: true,
@@ -86,10 +86,10 @@ export default function DashboardContent({
                       {card.title}
                     </h3>
                     {card.available && (
-                      <ArrowRight className="w-5 h-5 text-primary-400" />
+                      <ArrowRight className="w-5 h-5 text-teal-400" />
                     )}
                     {card.comingSoon && (
-                      <span className="text-xs bg-accent-yellow text-black px-2 py-1 rounded-full font-semibold">
+                      <span className="text-xs bg-teal-400 text-white px-2 py-1 rounded-full font-semibold">
                         Coming Soon
                       </span>
                     )}
