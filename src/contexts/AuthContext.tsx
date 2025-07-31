@@ -9,7 +9,6 @@ import {
 } from "@/lib/wallet";
 import { supabase, getSupabaseClient } from "@/lib/supabase";
 import toast from "react-hot-toast";
-import { useHydration } from "@/hooks/useHydration";
 
 interface AuthContextType {
   wallet: WalletConnection;
@@ -23,7 +22,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const isHydrated = useHydration();
   const [wallet, setWallet] = useState<WalletConnection>({
     address: "",
     type: "metamask",
@@ -35,15 +33,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing wallet connection on mount
   useEffect(() => {
-    if (!isHydrated) {
-      setLoading(true);
-      return;
-    }
-
     const checkWalletConnection = async () => {
+      console.log("[DEBUG] Starting wallet connection check...");
+
       try {
         // Check if we're in the browser environment
         if (typeof window === "undefined") {
+          console.log(
+            "[DEBUG] Not in browser environment, setting loading to false"
+          );
           setLoading(false);
           return;
         }
@@ -73,12 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   "[DEBUG] MetaMask is connected with matching address"
                 );
 
-                // Fetch user data from our users table
-                const { data: userData, error: userError } = await supabase
+                // Fetch user data from our users table with timeout
+                const userPromise = supabase
                   .from("users")
                   .select("*")
                   .eq("wallet_address", storedWalletAddress)
                   .single();
+
+                const timeoutPromise = new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error("Supabase timeout")), 3000)
+                );
+
+                const { data: userData, error: userError } =
+                  (await Promise.race([userPromise, timeoutPromise])) as any;
 
                 if (userData) {
                   console.log("[DEBUG] Found user in database:", userData.id);
@@ -155,12 +160,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           connected: false,
         });
       } finally {
+        console.log("[DEBUG] Setting loading to false");
         setLoading(false);
       }
     };
 
+    console.log("[DEBUG] Calling checkWalletConnection");
     checkWalletConnection();
-  }, [isHydrated]);
+
+    // Fallback timeout to ensure loading doesn't get stuck
+    const timeoutId = setTimeout(() => {
+      console.log("[DEBUG] Fallback timeout reached, setting loading to false");
+      setLoading(false);
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const connectWallet = async (type: "metamask" | "hedera") => {
     try {
@@ -242,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         wallet,
         user,
-        loading: !isHydrated || loading,
+        loading: loading,
         connectWallet,
         disconnect,
         isAdmin,

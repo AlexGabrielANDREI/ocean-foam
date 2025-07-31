@@ -71,7 +71,10 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
 
     // Expose refresh function to parent components
     useImperativeHandle(ref, () => ({
-      refresh: checkPaymentStatus,
+      refresh: () => {
+        console.log("[DEBUG] PaymentStatusIndicator refresh called");
+        checkPaymentStatus();
+      },
     }));
 
     useEffect(() => {
@@ -82,10 +85,10 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
 
     if (loading) {
       return (
-        <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
           <div className="flex items-center space-x-2">
-            <div className="animate-spin w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full"></div>
-            <span className="text-sm text-gray-600">Checking payment...</span>
+            <div className="animate-spin w-3 h-3 border-2 border-teal-500 border-t-transparent rounded-full"></div>
+            <span className="text-xs text-gray-600">Checking...</span>
           </div>
         </div>
       );
@@ -107,64 +110,55 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
       const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
 
       if (hours > 0) {
-        return `${hours}h ${minutes}m remaining`;
+        return `${hours}h ${minutes}m`;
       } else {
-        return `${minutes}m remaining`;
+        return `${minutes}m`;
       }
     };
 
-    const formatDate = (date: Date) => {
-      return new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(date);
-    };
-
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm min-w-[280px]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2">
-            {paymentStatus.hasValidPayment ? (
-              <CheckCircle className="w-4 h-4 text-teal-500" />
-            ) : (
-              <XCircle className="w-4 h-4 text-blue-500" />
-            )}
-            <span className="text-sm font-medium text-gray-900">
-              {paymentStatus.hasValidPayment
-                ? "Payment Active"
-                : "Payment Required"}
-            </span>
-          </div>
+      <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+        <div className="flex items-center space-x-2">
+          {paymentStatus.hasValidPayment ? (
+            <CheckCircle className="w-3 h-3 text-teal-500" />
+          ) : (
+            <XCircle className="w-3 h-3 text-blue-500" />
+          )}
+          <span className="text-xs font-medium text-gray-900">
+            {paymentStatus.hasValidPayment ? "Active" : "Inactive"}
+          </span>
+
+          {paymentStatus.hasValidPayment && paymentStatus.expiresAt && (
+            <>
+              <span className="text-gray-400">•</span>
+              <div className="flex items-center space-x-1 text-xs text-gray-600">
+                <Clock className="w-3 h-3" />
+                <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
+              </div>
+            </>
+          )}
+
+          {!paymentStatus.hasValidPayment && (
+            <>
+              <span className="text-gray-400">•</span>
+              <span className="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                Payment required to run predictions
+              </span>
+            </>
+          )}
+
+          {/* Debug refresh button - remove after testing */}
+          <button
+            onClick={() => {
+              console.log("[DEBUG] Manual refresh clicked");
+              checkPaymentStatus();
+            }}
+            className="text-xs text-gray-500 hover:text-gray-700 ml-2"
+            title="Refresh payment status"
+          >
+            ↻
+          </button>
         </div>
-
-        {paymentStatus.hasValidPayment && paymentStatus.expiresAt && (
-          <div className="flex items-center space-x-1 text-xs text-gray-600 mb-2">
-            <Clock className="w-3 h-3" />
-            <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
-          </div>
-        )}
-
-        {paymentStatus.transactionHash && (
-          <div className="text-xs text-gray-500 mb-2">
-            <a
-              href={`https://sepolia.etherscan.io/tx/${paymentStatus.transactionHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-purple-600 hover:underline font-mono"
-            >
-              {paymentStatus.transactionHash.slice(0, 8)}...
-              {paymentStatus.transactionHash.slice(-6)}
-            </a>
-          </div>
-        )}
-
-        {!paymentStatus.hasValidPayment && (
-          <div className="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
-            Payment required to run predictions
-          </div>
-        )}
       </div>
     );
   }

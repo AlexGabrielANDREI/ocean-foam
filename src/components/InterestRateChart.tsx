@@ -320,7 +320,7 @@ export default function InterestRateChart({
 
               <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-4 rounded-xl border border-blue-500/20">
                 <h4 className="font-semibold text-white mb-2">
-                  July 29–30, 2025
+                  September 16–17, 2025
                 </h4>
                 <p className="text-sm text-teal-200 leading-relaxed">
                   The Federal Open Market Committee will convene to assess
@@ -499,16 +499,74 @@ export default function InterestRateChart({
 
         {/* Prediction Result */}
         {predictionResult && (
-          <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-teal-500/10 to-teal-500/10 border border-teal-500/20">
-            <h4 className="font-semibold text-foreground mb-2 flex items-center space-x-2">
+          <div className="mt-6 p-6 rounded-xl bg-gradient-to-r from-teal-500/10 to-teal-500/10 border border-teal-500/20">
+            <h4 className="font-semibold text-white mb-4 flex items-center space-x-2">
               <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
               <span>AI Prediction Result</span>
             </h4>
-            <div className="bg-card/50 p-3 rounded-lg">
-              <pre className="text-sm text-secondary-200 whitespace-pre-wrap">
-                {JSON.stringify(predictionResult, null, 2)}
-              </pre>
+
+            {/* Main Prediction */}
+            <div className="mb-6 text-center">
+              <div className="text-3xl font-bold text-teal-400 mb-2">
+                {predictionResult.prediction}
+              </div>
+              <div className="text-sm text-teal-200">Predicted Rate Change</div>
+              <div className="text-xs text-gray-400 mt-1">
+                Confidence: {(predictionResult.confidence * 100).toFixed(1)}%
+              </div>
             </div>
+
+            {/* Top 3 Probabilities */}
+            {predictionResult.probabilities && (
+              <div className="space-y-3">
+                <h5 className="text-sm font-medium text-white mb-3">
+                  Top 3 Scenarios
+                </h5>
+                {Object.entries(predictionResult.probabilities)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .slice(0, 3)
+                  .map(([change, probability], index) => (
+                    <div
+                      key={change}
+                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            index === 0
+                              ? "bg-teal-500 text-white"
+                              : index === 1
+                              ? "bg-blue-500 text-white"
+                              : "bg-purple-500 text-white"
+                          }`}
+                        >
+                          {index + 1}
+                        </div>
+                        <span className="text-white font-medium">{change}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 bg-gray-700 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${(probability as number) * 100}%`,
+                              backgroundColor:
+                                index === 0
+                                  ? "#14b8a6"
+                                  : index === 1
+                                  ? "#3b82f6"
+                                  : "#a855f7",
+                            }}
+                          ></div>
+                        </div>
+                        <span className="text-sm text-gray-300 min-w-[3rem]">
+                          {((probability as number) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Upload,
@@ -14,9 +14,6 @@ import {
 import toast from "react-hot-toast";
 import InterestRateChart from "./InterestRateChart";
 import PaymentModal from "./PaymentModal";
-import PaymentStatusIndicator, {
-  PaymentStatusIndicatorRef,
-} from "./PaymentStatusIndicator";
 
 interface Model {
   id: string;
@@ -27,7 +24,13 @@ interface Model {
   is_active: boolean;
 }
 
-export default function PredictionPage() {
+interface PredictionPageProps {
+  onRefreshPaymentStatus?: () => void;
+}
+
+export default function PredictionPage({
+  onRefreshPaymentStatus,
+}: PredictionPageProps) {
   const { user } = useAuth();
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -35,8 +38,6 @@ export default function PredictionPage() {
   const [currentTransactionHash, setCurrentTransactionHash] =
     useState<string>("");
   const [paymentRequired, setPaymentRequired] = useState(true);
-
-  const paymentStatusRef = useRef<PaymentStatusIndicatorRef>(null);
 
   useEffect(() => {
     loadActiveModel();
@@ -96,11 +97,12 @@ export default function PredictionPage() {
     setPaymentRequired(false); // User now has valid payment
     toast.success("Payment successful! You can now run your prediction.");
 
-    // Refresh payment status after successful payment
+    // Refresh payment status after successful payment with longer delay
     setTimeout(() => {
-      paymentStatusRef.current?.refresh();
-      checkPaymentStatus(); // Also update our local payment status
-    }, 1000); // Small delay to ensure the prediction is saved first
+      console.log("[DEBUG] Refreshing payment status after payment success");
+      checkPaymentStatus(); // Update our local payment status
+      onRefreshPaymentStatus?.(); // Refresh the payment status indicator in top navigation
+    }, 3000); // Longer delay to ensure backend processes the payment
   };
 
   if (!user) {
@@ -120,15 +122,15 @@ export default function PredictionPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Payment Status */}
+      {/* Header */}
       <div className="relative">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-2xl lg:text-4xl font-bold text-gray-900 mb-4">
             FOMC Interest Prediction and Analytics
           </h1>
 
           <div className="max-w-3xl mx-auto space-y-3">
-            <p className="text-xl text-gray-700 font-medium leading-relaxed">
+            <p className="text-lg lg:text-xl text-gray-700 font-medium leading-relaxed">
               A data-driven dApp for forecasting Federal Reserve interest rate
               decisions and market reactions.
             </p>
@@ -142,27 +144,22 @@ export default function PredictionPage() {
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-6 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-4 mt-6 text-sm text-gray-500">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
               <span>Real-time Data</span>
             </div>
-            <div className="w-px h-4 bg-gray-300"></div>
+            <div className="hidden lg:block w-px h-4 bg-gray-300"></div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               <span>ML-Powered</span>
             </div>
-            <div className="w-px h-4 bg-gray-300"></div>
+            <div className="hidden lg:block w-px h-4 bg-gray-300"></div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
               <span>Blockchain Verified</span>
             </div>
           </div>
-        </div>
-
-        {/* Compact Payment Status Indicator - Top Right */}
-        <div className="absolute top-0 right-0">
-          <PaymentStatusIndicator ref={paymentStatusRef} />
         </div>
       </div>
 
@@ -173,8 +170,7 @@ export default function PredictionPage() {
         onShowPaymentModal={handleShowPaymentModal}
         onPaymentSuccess={handlePaymentSuccess}
         onRefreshPaymentStatus={() => {
-          paymentStatusRef.current?.refresh();
-          checkPaymentStatus(); // Also update our local payment status
+          checkPaymentStatus(); // Update our local payment status
         }}
       />
 

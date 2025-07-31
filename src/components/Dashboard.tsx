@@ -1,10 +1,10 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
-import TopNavigation from "./TopNavigation";
+import TopNavigation, { TopNavigationRef } from "./TopNavigation";
 import DashboardContent from "./DashboardContent";
 import AdminDashboard from "./AdminDashboard";
 import PredictionPage from "./PredictionPage";
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const { user, isAdmin } = useAuth();
   const pathname = usePathname();
   const [currentRoute, setCurrentRoute] = useState("dashboard");
+  const topNavigationRef = useRef<TopNavigationRef>(null);
 
   // Update current route when pathname changes
   useEffect(() => {
@@ -75,7 +76,13 @@ export default function Dashboard() {
       case "dashboard":
         return <DashboardContent onRouteChange={handleRouteChange} />;
       case "prediction":
-        return <PredictionPage />;
+        return (
+          <PredictionPage
+            onRefreshPaymentStatus={() =>
+              topNavigationRef.current?.refreshPaymentStatus()
+            }
+          />
+        );
       case "admin":
         return <AdminDashboard />;
       case "admin-models":
@@ -95,7 +102,7 @@ export default function Dashboard() {
     <div className="h-screen flex overflow-hidden bg-gray-50">
       <Sidebar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
       <div className="flex-1 flex flex-col min-h-0">
-        <TopNavigation />
+        <TopNavigation ref={topNavigationRef} />
         <main className="flex-1 p-6 lg:p-8 overflow-auto">
           <div className="rounded-3xl p-6 lg:p-8 bg-white shadow-sm">
             {renderContent()}

@@ -7,14 +7,6 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import ClientOnly from "@/components/ClientOnly";
 
 export default function Home() {
-  return (
-    <ClientOnly fallback={<LoadingSpinner />}>
-      <HomeContent />
-    </ClientOnly>
-  );
-}
-
-function HomeContent() {
   const { wallet, loading } = useAuth();
 
   // Show loading spinner while checking wallet connection
