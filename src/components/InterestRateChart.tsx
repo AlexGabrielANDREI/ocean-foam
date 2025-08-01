@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import PaymentModal from "./PaymentModal";
+import LoadingModal from "./LoadingModal";
 
 interface InterestRateData {
   Date: string;
@@ -422,18 +423,6 @@ export default function InterestRateChart({
           )}
         </div>
 
-        {/* Loading Status Indicator - Only for prediction, not payment */}
-        {predictionLoading && !paymentProcessing && (
-          <div className="mt-6 mb-4 text-center">
-            <div className="inline-flex items-center space-x-3 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20">
-              <div className="animate-spin w-5 h-5 border-2 border-teal-400 border-t-transparent rounded-full"></div>
-              <span className="text-white font-medium">
-                Running AI prediction...
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Action Buttons Below Chart */}
         <div className="mt-6 flex items-center justify-center space-x-4">
           {activeModel && (
@@ -589,6 +578,13 @@ export default function InterestRateChart({
             onPaid={handlePaymentSuccessInternal}
           />
         )}
+
+        {/* Model Processing Loading Modal */}
+        <LoadingModal
+          open={predictionLoading}
+          title="Processing AI Model"
+          message="Please wait while we run your prediction through our advanced AI models..."
+        />
       </div>
     </div>
   );

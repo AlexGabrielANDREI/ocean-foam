@@ -125,36 +125,36 @@ export default function PredictionPage({
       {/* Header */}
       <div className="relative">
         <div className="text-center mb-8">
-          <h1 className="text-2xl lg:text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-2xl lg:text-4xl font-bold text-white mb-4">
             FOMC Interest Prediction and Analytics
           </h1>
 
           <div className="max-w-3xl mx-auto space-y-3">
-            <p className="text-lg lg:text-xl text-gray-700 font-medium leading-relaxed">
+            <p className="text-lg lg:text-xl text-slate-200 font-medium leading-relaxed">
               A data-driven dApp for forecasting Federal Reserve interest rate
               decisions and market reactions.
             </p>
-            <p className="text-gray-600 leading-relaxed">
+            <p className="text-slate-300 leading-relaxed">
               Predicts FOMC interest rate moves using historical data and
               financial indicators.
-              <span className="font-semibold text-gray-700">
+              <span className="font-semibold text-slate-200">
                 {" "}
                 Useful for traders, researchers, and data scientists.
               </span>
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-4 mt-6 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-4 mt-6 text-sm text-slate-400">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
               <span>Real-time Data</span>
             </div>
-            <div className="hidden lg:block w-px h-4 bg-gray-300"></div>
+            <div className="hidden lg:block w-px h-4 bg-slate-600"></div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               <span>ML-Powered</span>
             </div>
-            <div className="hidden lg:block w-px h-4 bg-gray-300"></div>
+            <div className="hidden lg:block w-px h-4 bg-slate-600"></div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
               <span>Blockchain Verified</span>
@@ -185,8 +185,8 @@ export default function PredictionPage({
               <h3 className="font-medium text-white text-xl">
                 {activeModel.name}
               </h3>
-              <p className="text-teal-200 mb-2">{activeModel.description}</p>
-              <span className="bg-teal-100 text-teal-700 px-2 py-1 rounded text-sm mr-2">
+              <p className="text-slate-300 mb-2">{activeModel.description}</p>
+              <span className="bg-teal-500/20 text-teal-300 px-2 py-1 rounded text-sm mr-2">
                 v{activeModel.version}
               </span>
               {activeModel.use_manual_features && (
@@ -195,7 +195,7 @@ export default function PredictionPage({
                 </span>
               )}
             </div>
-            <div className="text-sm text-teal-300 mb-4">
+            <div className="text-sm text-slate-300 mb-4">
               💡 Use the "Predict Next Rate" button in the chart above to run
               predictions for the upcoming FOMC meeting.
             </div>
@@ -205,7 +205,7 @@ export default function PredictionPage({
       ) : (
         <div className="text-center py-8">
           <Database className="w-12 h-12 text-teal-400 mx-auto mb-4" />
-          <p className="text-teal-200">No active model available</p>
+          <p className="text-slate-300">No active model available</p>
         </div>
       )}
     </div>

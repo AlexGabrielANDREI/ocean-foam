@@ -76,9 +76,9 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
   };
 
   return (
-    <aside className="w-80 h-full flex flex-col bg-white border-r border-gray-200 shadow-sm">
+    <aside className="w-80 h-full flex flex-col glass border-r border-white/10 shadow-sm">
       {/* Header */}
-      <div className="p-8 border-b  flex-shrink-0">
+      <div className="p-8 border-b border-white/10 flex-shrink-0">
         <div className="flex flex-col items-center">
           <div className="w-40 flex items-center justify-center">
             <Image
@@ -100,8 +100,8 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
               onClick={() => handleItemClick(item)}
               className={`w-full text-left flex items-center px-4 py-3 rounded-xl transition-all duration-200 ${
                 item.active
-                  ? "bg-teal-50 text-teal-700 border border-teal-200"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                  ? "bg-gradient-to-r from-teal-500 to-blue-500 text-white border border-teal-400/30 glow-primary"
+                  : "text-slate-200 hover:bg-white/5 hover:text-white"
               } ${item.comingSoon ? "opacity-50 cursor-not-allowed" : ""}`}
               disabled={item.comingSoon}
             >
@@ -119,7 +119,7 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
         {isAdmin && (
           <>
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-teal-600 uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
                 Admin Panel
               </h3>
             </div>
@@ -130,8 +130,8 @@ export default function Sidebar({ currentRoute, onRouteChange }: SidebarProps) {
                   onClick={() => handleItemClick(item)}
                   className={`w-full text-left flex items-center px-4 py-3 rounded-xl transition-all duration-200 ${
                     item.active
-                      ? "bg-teal-50 text-teal-700 border border-teal-200"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      ? "bg-gradient-to-r from-teal-500 to-blue-500 text-white border border-teal-400/30 glow-primary"
+                      : "text-slate-200 hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   <item.icon className="w-6 h-6 mr-4" />

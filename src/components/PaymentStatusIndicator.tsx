@@ -85,10 +85,10 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
 
     if (loading) {
       return (
-        <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+        <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
           <div className="flex items-center space-x-2">
             <div className="animate-spin w-3 h-3 border-2 border-teal-500 border-t-transparent rounded-full"></div>
-            <span className="text-xs text-gray-600">Checking...</span>
+            <span className="text-xs text-slate-300">Checking...</span>
           </div>
         </div>
       );
@@ -117,21 +117,21 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
     };
 
     return (
-      <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+      <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
         <div className="flex items-center space-x-2">
           {paymentStatus.hasValidPayment ? (
             <CheckCircle className="w-3 h-3 text-teal-500" />
           ) : (
-            <XCircle className="w-3 h-3 text-blue-500" />
+            <XCircle className="w-3 h-3 text-blue-400" />
           )}
-          <span className="text-xs font-medium text-gray-900">
+          <span className="text-xs font-medium text-slate-200">
             {paymentStatus.hasValidPayment ? "Active" : "Inactive"}
           </span>
 
           {paymentStatus.hasValidPayment && paymentStatus.expiresAt && (
             <>
-              <span className="text-gray-400">•</span>
-              <div className="flex items-center space-x-1 text-xs text-gray-600">
+              <span className="text-slate-400">•</span>
+              <div className="flex items-center space-x-1 text-xs text-slate-300">
                 <Clock className="w-3 h-3" />
                 <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
               </div>
@@ -140,8 +140,8 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
 
           {!paymentStatus.hasValidPayment && (
             <>
-              <span className="text-gray-400">•</span>
-              <span className="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+              <span className="text-slate-400">•</span>
+              <span className="text-xs text-blue-300 bg-blue-500/20 px-2 py-1 rounded">
                 Payment required to run predictions
               </span>
             </>
@@ -153,7 +153,7 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
               console.log("[DEBUG] Manual refresh clicked");
               checkPaymentStatus();
             }}
-            className="text-xs text-gray-500 hover:text-gray-700 ml-2"
+            className="text-xs text-slate-400 hover:text-slate-200 ml-2"
             title="Refresh payment status"
           >
             ↻

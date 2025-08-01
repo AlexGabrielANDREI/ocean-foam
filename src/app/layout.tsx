@@ -30,11 +30,12 @@ export default function RootLayout({
             toastOptions={{
               duration: 4000,
               style: {
-                background: "#f8fafc", // light background
-                color: "#1e293b", // dark text
-                border: "1px solid #cbd5e1", // subtle border
-                boxShadow: "0 4px 24px 0 rgba(30,41,59,0.10)",
+                background: "rgba(30, 41, 59, 0.95)", // dark background
+                color: "#f8fafc", // light text
+                border: "1px solid rgba(255, 255, 255, 0.1)", // subtle border
+                boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3)",
                 fontWeight: 500,
+                backdropFilter: "blur(10px)",
               },
             }}
           />

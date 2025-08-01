@@ -31,14 +31,14 @@ body {
     "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0f172a;
+  background: #0a0a0a;
   color: #f8fafc;
   overflow-x: hidden;
 }
 
 /* Static Dark Background - More Subtle */
 .dark-bg {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #1e293b 100%);
 }
 
 /* Glass Morphism Effect - More Subtle */
@@ -106,7 +106,7 @@ body {
 
 /* Card Styles */
 .card {
-  @apply glass rounded-3xl p-6 transition-all duration-300 hover:scale-105;
+  @apply glass rounded-3xl p-6 transition-all duration-300;
 }
 
 /* Input Styles */
@@ -196,6 +196,28 @@ body {
 *:focus {
   outline: 2px solid #19baa8;
   outline-offset: 2px;
+}
+
+/* Modal Styles - Ensure proper layering */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  position: relative;
+  z-index: 10000;
+  max-height: 95vh;
+  overflow-y: auto;
+}
+
+/* Ensure table doesn't interfere with modals */
+.table-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* Selection Styles */

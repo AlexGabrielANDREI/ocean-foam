@@ -67,7 +67,7 @@ export default function DashboardContent({
               <div
                 key={index}
                 onClick={() => handleCardClick(card)}
-                className={`glass rounded-3xl p-5 sm:p-7 md:p-8 hover:scale-105 transition-all duration-300 cursor-pointer min-h-[220px] sm:min-h-[260px] flex flex-col justify-between ${
+                className={`glass rounded-3xl p-5 sm:p-7 md:p-8 transition-all duration-300 cursor-pointer min-h-[220px] sm:min-h-[260px] flex flex-col justify-between ${
                   card.available
                     ? "hover:shadow-2xl hover:shadow-primary-500/20"
                     : "opacity-60 cursor-not-allowed"

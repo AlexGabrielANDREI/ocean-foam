@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseClient } from "@/lib/supabase";
 import {
   Database,
   Upload,
@@ -63,12 +63,20 @@ export default function AdminModelsPage({
 
   const fetchModels = async () => {
     try {
-      const { data, error } = await supabase
+      console.log("🔄 Fetching models...");
+
+      // Use authenticated client if user is available
+      const client = user?.wallet_address
+        ? getSupabaseClient(user.wallet_address)
+        : supabase;
+
+      const { data, error } = await client
         .from("models")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+      console.log("📋 Fetched models:", data?.length || 0, "models");
       setModels(data || []);
     } catch (error) {
       console.error("Error fetching models:", error);
@@ -79,8 +87,11 @@ export default function AdminModelsPage({
   };
 
   const toggleModelStatus = async (modelId: string, currentStatus: boolean) => {
+    if (!user?.wallet_address) return;
+
     try {
-      const { error } = await supabase
+      const authenticatedClient = getSupabaseClient(user.wallet_address);
+      const { error } = await authenticatedClient
         .from("models")
         .update({ is_active: !currentStatus })
         .eq("id", modelId);
@@ -101,36 +112,113 @@ export default function AdminModelsPage({
   const closeDeleteModal = () => setDeleteTarget(null);
 
   const deleteModel = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !user?.wallet_address) return;
     setDeleteLoading(true);
+
+    console.log("🗑️ Starting delete process for model:", deleteTarget);
+    console.log("🗑️ Model path:", deleteTarget.model_path);
+    console.log("🗑️ Features path:", deleteTarget.features_path);
+    console.log("🗑️ User wallet:", user.wallet_address);
+
+    // Get authenticated Supabase client
+    const authenticatedClient = getSupabaseClient(user.wallet_address);
+
     try {
-      // Delete from database
-      const { error } = await supabase
+      // First, let's test if we can access the storage buckets
+      console.log("🔍 Testing storage access...");
+
+      // List files in ml-models bucket
+      const { data: modelFiles, error: listModelError } = await supabase.storage
+        .from("ml-models")
+        .list();
+
+      console.log("📁 Model files in bucket:", modelFiles);
+      if (listModelError)
+        console.warn("⚠️ Error listing model files:", listModelError);
+
+      // List files in features-uploads bucket
+      const { data: featureFiles, error: listFeatureError } =
+        await supabase.storage.from("features-uploads").list();
+
+      console.log("📁 Feature files in bucket:", featureFiles);
+      if (listFeatureError)
+        console.warn("⚠️ Error listing feature files:", listFeatureError);
+
+      // Delete from database first using authenticated client
+      console.log("🗑️ Deleting from database...");
+      const { error } = await authenticatedClient
         .from("models")
         .delete()
         .eq("id", deleteTarget.id);
-      if (error) throw error;
-      // Delete from storage
-      const slugify = (str: string) =>
-        str
-          .toLowerCase()
-          .replace(/\s+/g, "_")
-          .replace(/[^a-z0-9_]/g, "");
-      const modelFolder = `${deleteTarget.owner_wallet}/${slugify(
-        deleteTarget.name
-      )}`;
-      const modelPath = `${modelFolder}/model.pkl`;
-      const featuresPath = `${modelFolder}/features.json`;
-      // Remove model file
-      await supabase.storage.from("ml-models").remove([modelPath]);
-      // Remove features file
-      await supabase.storage.from("features-uploads").remove([featuresPath]);
-      // Optionally, remove the folder (Supabase Storage does not have folders, so just files)
+
+      if (error) {
+        console.error("❌ Database delete error:", error);
+        throw error;
+      }
+
+      console.log("✅ Database record deleted successfully");
+
+      // Delete model file from storage
+      if (deleteTarget.model_path) {
+        console.log(
+          "🗑️ Attempting to delete model file:",
+          deleteTarget.model_path
+        );
+        try {
+          const { error: modelDeleteError } = await supabase.storage
+            .from("ml-models")
+            .remove([deleteTarget.model_path]);
+
+          if (modelDeleteError) {
+            console.warn("⚠️ Model file delete error:", modelDeleteError);
+          } else {
+            console.log("✅ Model file deleted successfully");
+          }
+        } catch (storageError) {
+          console.warn("⚠️ Model file storage error:", storageError);
+        }
+      } else {
+        console.log("ℹ️ No model path to delete");
+      }
+
+      // Delete features file from storage
+      if (deleteTarget.features_path) {
+        console.log(
+          "🗑️ Attempting to delete features file:",
+          deleteTarget.features_path
+        );
+        try {
+          const { error: featuresDeleteError } = await supabase.storage
+            .from("features-uploads")
+            .remove([deleteTarget.features_path]);
+
+          if (featuresDeleteError) {
+            console.warn("⚠️ Features file delete error:", featuresDeleteError);
+          } else {
+            console.log("✅ Features file deleted successfully");
+          }
+        } catch (storageError) {
+          console.warn("⚠️ Features file storage error:", storageError);
+        }
+      } else {
+        console.log("ℹ️ No features path to delete");
+      }
+
       toast.success("Model and associated files deleted successfully");
       setDeleteTarget(null);
-      fetchModels();
+
+      // Update state directly to remove the deleted model
+      setModels((prevModels) =>
+        prevModels.filter((model) => model.id !== deleteTarget.id)
+      );
+      console.log("✅ Model removed from state");
+
+      // Also fetch fresh data from database
+      console.log("🔄 Refreshing models list after deletion...");
+      await fetchModels();
+      console.log("✅ Models list refreshed");
     } catch (error) {
-      console.error("Error deleting model:", error);
+      console.error("❌ Error deleting model:", error);
       toast.error("Failed to delete model and files");
     } finally {
       setDeleteLoading(false);
@@ -279,7 +367,8 @@ export default function AdminModelsPage({
         const result = await uploadRes.json();
         features_path = result.features_path;
       }
-      const { error } = await supabase
+      const authenticatedClient = getSupabaseClient(user?.wallet_address || "");
+      const { error } = await authenticatedClient
         .from("models")
         .update({
           name: editForm.name,
@@ -358,7 +447,7 @@ export default function AdminModelsPage({
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto table-container">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
@@ -452,198 +541,208 @@ export default function AdminModelsPage({
 
       {/* Edit Modal */}
       {editModel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="glass rounded-2xl shadow-2xl border border-border w-full max-w-lg sm:max-w-xl md:max-w-2xl px-2 sm:px-4 py-6 sm:py-8 overflow-y-auto max-h-screen relative">
-            <button
-              onClick={closeEditModal}
-              className="absolute top-3 right-3 text-xl text-secondary-400 hover:text-white focus:outline-none"
-              title="Close"
-            >
-              &times;
-            </button>
-            <h2 className="text-2xl font-bold mb-4 gradient-text">
-              Edit Model
-            </h2>
-            <form
-              className="space-y-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveEdit();
-              }}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Model Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={editForm.name}
-                    onChange={handleEditChange}
-                    className="input-field"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Owner Wallet Address
-                  </label>
-                  <input
-                    type="text"
-                    name="owner_wallet"
-                    value={editForm.owner_wallet}
-                    onChange={handleEditChange}
-                    className="input-field"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  value={editForm.description}
-                  onChange={handleEditChange}
-                  className="input-field min-h-[100px]"
-                />
-              </div>
-              <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="use_manual_features"
-                  name="use_manual_features"
-                  checked={editForm.use_manual_features}
-                  onChange={handleEditChange}
-                  className="w-4 h-4 text-primary-500 bg-card border-border rounded focus:ring-primary-400"
-                />
-                <label
-                  htmlFor="use_manual_features"
-                  className="text-sm font-medium text-white"
+        <div className="modal-overlay flex items-start justify-center p-2 sm:p-4 pt-20">
+          <div className="glass rounded-2xl shadow-2xl border border-border w-full max-w-lg sm:max-w-xl md:max-w-2xl modal-content">
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="flex-shrink-0 p-4 sm:p-6 border-b border-white/10">
+                <button
+                  onClick={closeEditModal}
+                  className="absolute top-3 right-3 text-xl text-secondary-400 hover:text-white focus:outline-none"
+                  title="Close"
                 >
-                  Use Manual Features (users upload JSON files)
-                </label>
+                  &times;
+                </button>
+                <h2 className="text-xl sm:text-2xl font-bold gradient-text pr-8">
+                  Edit Model
+                </h2>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Model File Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Model File (.pkl)
-                  </label>
-                  <div
-                    {...getEditModelRootProps()}
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 ${
-                      isEditModelDragActive
-                        ? "border-primary-500 bg-primary-500/10"
-                        : "border-border hover:border-primary-400"
-                    }`}
-                  >
-                    <input {...getEditModelInputProps()} />
-                    <Upload className="w-10 h-10 mx-auto mb-2 text-secondary-400" />
-                    {editModelFile ? (
-                      <div>
-                        <p className="text-white font-medium">
-                          {editModelFile.name}
-                        </p>
-                        <p className="text-sm text-secondary-400">
-                          Size: {(editModelFile.size / 1024 / 1024).toFixed(2)}{" "}
-                          MB
-                        </p>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0">
+                <form
+                  className="space-y-6"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveEdit();
+                  }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Model Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={editForm.name}
+                        onChange={handleEditChange}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Owner Wallet Address
+                      </label>
+                      <input
+                        type="text"
+                        name="owner_wallet"
+                        value={editForm.owner_wallet}
+                        onChange={handleEditChange}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      name="description"
+                      value={editForm.description}
+                      onChange={handleEditChange}
+                      className="input-field min-h-[100px]"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="use_manual_features"
+                      name="use_manual_features"
+                      checked={editForm.use_manual_features}
+                      onChange={handleEditChange}
+                      className="w-4 h-4 text-primary-500 bg-card border-border rounded focus:ring-primary-400"
+                    />
+                    <label
+                      htmlFor="use_manual_features"
+                      className="text-sm font-medium text-white"
+                    >
+                      Use Manual Features (users upload JSON files)
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Model File Upload */}
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Model File (.pkl)
+                      </label>
+                      <div
+                        {...getEditModelRootProps()}
+                        className={`border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center transition-all duration-300 ${
+                          isEditModelDragActive
+                            ? "border-primary-500 bg-primary-500/10"
+                            : "border-border hover:border-primary-400"
+                        }`}
+                      >
+                        <input {...getEditModelInputProps()} />
+                        <Upload className="w-10 h-10 mx-auto mb-2 text-secondary-400" />
+                        {editModelFile ? (
+                          <div>
+                            <p className="text-white font-medium">
+                              {editModelFile.name}
+                            </p>
+                            <p className="text-sm text-secondary-400">
+                              Size:{" "}
+                              {(editModelFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-white font-medium">
+                              {isEditModelDragActive
+                                ? "Drop the model file here"
+                                : "Drag & drop model file here or click to select"}
+                            </p>
+                            <p className="text-xs text-secondary-500 mt-2">
+                              Maximum size: 50MB
+                            </p>
+                            <p className="text-xs text-secondary-500 mt-1">
+                              Current:{" "}
+                              {editModel?.model_path
+                                ? editModel.model_path.split("/").pop()
+                                : "None"}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    ) : (
+                    </div>
+                    {/* Features File Upload (if manual features enabled) */}
+                    {editForm.use_manual_features && (
                       <div>
-                        <p className="text-white font-medium">
-                          {isEditModelDragActive
-                            ? "Drop the model file here"
-                            : "Drag & drop model file here or click to select"}
-                        </p>
-                        <p className="text-xs text-secondary-500 mt-2">
-                          Maximum size: 50MB
-                        </p>
-                        <p className="text-xs text-secondary-500 mt-1">
-                          Current:{" "}
-                          {editModel?.model_path
-                            ? editModel.model_path.split("/").pop()
-                            : "None"}
-                        </p>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          Features Template File (.json)
+                        </label>
+                        <div
+                          {...getEditFeaturesRootProps()}
+                          className={`border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center transition-all duration-300 ${
+                            isEditFeaturesDragActive
+                              ? "border-primary-500 bg-primary-500/10"
+                              : "border-border hover:border-primary-400"
+                          }`}
+                        >
+                          <input {...getEditFeaturesInputProps()} />
+                          <Upload className="w-10 h-10 mx-auto mb-2 text-secondary-400" />
+                          {editFeaturesFile ? (
+                            <div>
+                              <p className="text-white font-medium">
+                                {editFeaturesFile.name}
+                              </p>
+                              <p className="text-sm text-secondary-400">
+                                Size:{" "}
+                                {(editFeaturesFile.size / 1024).toFixed(2)} KB
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-white font-medium">
+                                {isEditFeaturesDragActive
+                                  ? "Drop the features file here"
+                                  : "Drag & drop features file here or click to select"}
+                              </p>
+                              <p className="text-xs text-secondary-500 mt-2">
+                                Maximum size: 1MB
+                              </p>
+                              <p className="text-xs text-secondary-500 mt-1">
+                                Current:{" "}
+                                {editModel?.features_path
+                                  ? editModel.features_path.split("/").pop()
+                                  : "None"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
-                {/* Features File Upload (if manual features enabled) */}
-                {editForm.use_manual_features && (
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      Features Template File (.json)
-                    </label>
-                    <div
-                      {...getEditFeaturesRootProps()}
-                      className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 ${
-                        isEditFeaturesDragActive
-                          ? "border-primary-500 bg-primary-500/10"
-                          : "border-border hover:border-primary-400"
-                      }`}
+                  <div className="flex justify-end space-x-2 mt-6">
+                    <button
+                      type="button"
+                      onClick={closeEditModal}
+                      className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      disabled={editLoading}
                     >
-                      <input {...getEditFeaturesInputProps()} />
-                      <Upload className="w-10 h-10 mx-auto mb-2 text-secondary-400" />
-                      {editFeaturesFile ? (
-                        <div>
-                          <p className="text-white font-medium">
-                            {editFeaturesFile.name}
-                          </p>
-                          <p className="text-sm text-secondary-400">
-                            Size: {(editFeaturesFile.size / 1024).toFixed(2)} KB
-                          </p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-white font-medium">
-                            {isEditFeaturesDragActive
-                              ? "Drop the features file here"
-                              : "Drag & drop features file here or click to select"}
-                          </p>
-                          <p className="text-xs text-secondary-500 mt-2">
-                            Maximum size: 1MB
-                          </p>
-                          <p className="text-xs text-secondary-500 mt-1">
-                            Current:{" "}
-                            {editModel?.features_path
-                              ? editModel.features_path.split("/").pop()
-                              : "None"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+                      disabled={editLoading}
+                    >
+                      {editLoading ? "Saving..." : "Save"}
+                    </button>
                   </div>
-                )}
+                </form>
               </div>
-              <div className="flex justify-end space-x-2 mt-6">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  disabled={editLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold"
-                  disabled={editLoading}
-                >
-                  {editLoading ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="glass rounded-2xl shadow-2xl border border-border w-full max-w-md px-2 sm:px-4 py-6 sm:py-8 overflow-y-auto max-h-screen relative">
+        <div className="modal-overlay flex items-start justify-center pt-20">
+          <div className="glass rounded-2xl shadow-2xl border border-border w-full max-w-md px-2 sm:px-4 py-6 sm:py-8 modal-content">
             <button
               onClick={closeDeleteModal}
               className="absolute top-3 right-3 text-xl text-secondary-400 hover:text-white focus:outline-none"

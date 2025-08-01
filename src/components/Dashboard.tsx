@@ -99,14 +99,12 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-50">
+    <div className="h-screen flex overflow-hidden bg-slate-950">
       <Sidebar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
         <TopNavigation ref={topNavigationRef} />
-        <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          <div className="rounded-3xl p-6 lg:p-8 bg-white shadow-sm">
-            {renderContent()}
-          </div>
+        <main className="flex-1 p-6 lg:p-8 overflow-auto bg-slate-950">
+          <div className="rounded-3xl p-6 lg:p-8 glass">{renderContent()}</div>
         </main>
       </div>
     </div>
