@@ -183,5 +183,7 @@
   { "Date": "2025-03", "FedDecisionRate": 4.5 },
   { "Date": "2025-05", "FedDecisionRate": 4.5 },
   { "Date": "2025-06", "FedDecisionRate": 4.5 },
-  { "Date": "2025-07", "FedDecisionRate": 4.5 }
+  { "Date": "2025-07", "FedDecisionRate": 4.5 },
+  { "Date": "2025-09", "FedDecisionRate": 4.25 },
+  { "Date": "2025-10", "FedDecisionRate": 4.25 }
 ]

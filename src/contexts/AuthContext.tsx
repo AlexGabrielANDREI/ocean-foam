@@ -207,6 +207,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(existingUser);
         setIsAdmin(existingUser.role === "admin");
         toast.success("Wallet connected successfully!");
+
+        // Redirect to prediction page after successful login
+        setTimeout(() => {
+          window.history.pushState({}, "", "/prediction");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }, 500);
       } else {
         console.log(
           "[DEBUG] Creating new user for wallet:",
@@ -232,6 +238,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(newUser);
         setIsAdmin(false);
         toast.success("New account created and wallet connected!");
+
+        // Redirect to prediction page after successful account creation
+        setTimeout(() => {
+          window.history.pushState({}, "", "/prediction");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }, 500);
       }
 
       setWallet(walletConnection);

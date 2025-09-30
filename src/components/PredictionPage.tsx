@@ -14,6 +14,7 @@ import {
 import toast from "react-hot-toast";
 import InterestRateChart from "./InterestRateChart";
 import PaymentModal from "./PaymentModal";
+import ModelOverview from "./ModelOverview";
 
 interface Model {
   id: string;
@@ -33,6 +34,7 @@ export default function PredictionPage({
 }: PredictionPageProps) {
   const { user } = useAuth();
   const [activeModel, setActiveModel] = useState<Model | null>(null);
+  const [modelLoading, setModelLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [currentTransactionHash, setCurrentTransactionHash] =
@@ -72,6 +74,7 @@ export default function PredictionPage({
 
   const loadActiveModel = async () => {
     try {
+      setModelLoading(true);
       const response = await fetch("/api/models", {
         headers: {
           "x-wallet-address": user!.wallet_address,
@@ -85,6 +88,8 @@ export default function PredictionPage({
     } catch (error) {
       console.error("Failed to load model:", error);
       toast.error("Failed to load model");
+    } finally {
+      setModelLoading(false);
     }
   };
 
@@ -175,7 +180,21 @@ export default function PredictionPage({
       />
 
       {/* Active Model Info */}
-      {activeModel ? (
+      {modelLoading ? (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="text-lg font-semibold text-white">Active Model</h2>
+          </div>
+          <div className="card-body">
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-slate-300">Loading model...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : activeModel ? (
         <div className="card">
           <div className="card-header">
             <h2 className="text-lg font-semibold text-white">Active Model</h2>
@@ -208,6 +227,9 @@ export default function PredictionPage({
           <p className="text-slate-300">No active model available</p>
         </div>
       )}
+
+      {/* Model Overview Section */}
+      <ModelOverview />
     </div>
   );
 }

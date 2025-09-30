@@ -2,27 +2,27 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { getPaymentPrice, makePayment } from "@/lib/contract";
 import {
-  CreditCard,
+  FileText,
   X,
   CheckCircle,
   AlertCircle,
   ExternalLink,
   Loader2,
-  Sparkles,
+  BarChart3,
   Shield,
 } from "lucide-react";
 
-interface PaymentModalProps {
+interface EdaPaymentModalProps {
   open: boolean;
   onClose: () => void;
   onPaid: (transactionHash: string) => void;
 }
 
-export default function PaymentModal({
+export default function EdaPaymentModal({
   open,
   onClose,
   onPaid,
-}: PaymentModalProps) {
+}: EdaPaymentModalProps) {
   const [price, setPrice] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -82,18 +82,18 @@ export default function PaymentModal({
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const tx = await makePayment(signer, price);
-      console.log("[DEBUG] Payment transaction created:", tx.hash);
+      console.log("[DEBUG] EDA Payment transaction created:", tx.hash);
       setTxHash(tx.hash);
       await tx.wait();
       console.log(
-        "[DEBUG] Payment transaction confirmed, calling onPaid with:",
+        "[DEBUG] EDA Payment transaction confirmed, calling onPaid with:",
         tx.hash
       );
       // Pass transaction hash to parent component
       onPaid(tx.hash);
     } catch (err: any) {
-      console.error("[DEBUG] Payment failed:", err);
-      setError(err.message || "Payment failed");
+      console.error("[DEBUG] EDA Payment failed:", err);
+      setError(err.message || "EDA Payment failed");
     } finally {
       setLoading(false);
     }
@@ -102,11 +102,11 @@ export default function PaymentModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay flex items-center justify-center">
-      <div className="glass rounded-2xl shadow-xl max-w-sm w-full mx-4 relative border border-white/10 modal-content">
+    <div className="modal-overlay flex items-center justify-center z-[9999]">
+      <div className="glass rounded-2xl shadow-xl max-w-sm w-full mx-4 relative border border-white/10 modal-content z-[10000]">
         {/* Close Button */}
         <button
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 transition-colors z-10"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 transition-colors z-[10001]"
           onClick={onClose}
           aria-label="Close"
         >
@@ -118,7 +118,7 @@ export default function PaymentModal({
           {/* Loading State */}
           {loading && !price && (
             <div className="text-center py-12">
-              <Loader2 className="w-8 h-8 text-teal-500 animate-spin mx-auto mb-4" />
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
               <p className="text-slate-300">Loading payment details...</p>
             </div>
           )}
@@ -141,7 +141,7 @@ export default function PaymentModal({
           {/* Payment Processing State */}
           {loading && price && (
             <div className="text-center py-8">
-              <div className="animate-spin w-12 h-12 border-4 border-teal-200 border-t-teal-500 rounded-full mx-auto mb-4"></div>
+              <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-4"></div>
               <h3 className="text-lg font-semibold text-white mb-2">
                 Processing Payment
               </h3>
@@ -157,7 +157,7 @@ export default function PaymentModal({
               {/* Price Display */}
               <div className="text-center">
                 <div className="mb-4">
-                  <div className="text-4xl font-bold text-teal-400 mb-1">
+                  <div className="text-4xl font-bold text-blue-400 mb-1">
                     {price} ETH
                   </div>
                   {usdAmount && (
@@ -219,7 +219,7 @@ export default function PaymentModal({
                     ? "bg-green-500 cursor-default"
                     : loading
                     ? "bg-slate-600 cursor-not-allowed"
-                    : "bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 hover:scale-105 shadow-lg glow-primary"
+                    : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 hover:scale-105 shadow-lg glow-primary"
                 }`}
                 onClick={handlePay}
                 disabled={loading || !!txHash}
@@ -236,7 +236,7 @@ export default function PaymentModal({
                   </div>
                 ) : (
                   <div className="flex items-center justify-center space-x-2">
-                    <CreditCard className="w-4 h-4" />
+                    <BarChart3 className="w-4 h-4" />
                     <span>Pay with MetaMask</span>
                   </div>
                 )}

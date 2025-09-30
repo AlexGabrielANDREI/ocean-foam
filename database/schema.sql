@@ -39,6 +39,14 @@ CREATE TABLE predictions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- EDA Access table
+CREATE TABLE eda_access (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    transaction_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_users_wallet_address ON users(wallet_address);
 CREATE INDEX idx_users_role ON users(role);
@@ -48,6 +56,8 @@ CREATE INDEX idx_models_owner ON models(owner_wallet);
 CREATE INDEX idx_predictions_user_id ON predictions(user_id);
 CREATE INDEX idx_predictions_model_id ON predictions(model_id);
 CREATE INDEX idx_predictions_created_at ON predictions(created_at);
+CREATE INDEX idx_eda_access_user_id ON eda_access(user_id);
+CREATE INDEX idx_eda_access_created_at ON eda_access(created_at);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -73,6 +83,7 @@ CREATE TRIGGER update_models_updated_at BEFORE UPDATE ON models
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE models ENABLE ROW LEVEL SECURITY;
 ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eda_access ENABLE ROW LEVEL SECURITY;
 
 -- Users can only see their own data
 CREATE POLICY "Users can view own data" ON users
@@ -117,6 +128,24 @@ CREATE POLICY "Users can view own predictions" ON predictions
 
 -- Users can insert their own predictions
 CREATE POLICY "Users can insert own predictions" ON predictions
+    FOR INSERT WITH CHECK (
+        user_id IN (
+            SELECT id FROM users 
+            WHERE wallet_address = current_setting('app.wallet_address', true)
+        )
+    );
+
+-- Users can view their own EDA access records
+CREATE POLICY "Users can view own EDA access" ON eda_access
+    FOR SELECT USING (
+        user_id IN (
+            SELECT id FROM users 
+            WHERE wallet_address = current_setting('app.wallet_address', true)
+        )
+    );
+
+-- Users can insert their own EDA access records
+CREATE POLICY "Users can insert own EDA access" ON eda_access
     FOR INSERT WITH CHECK (
         user_id IN (
             SELECT id FROM users 

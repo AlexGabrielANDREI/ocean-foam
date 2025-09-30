@@ -50,6 +50,7 @@ export default function ModelUploadPage() {
   // File states
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [featuresFile, setFeaturesFile] = useState<File | null>(null);
+  const [edaFile, setEdaFile] = useState<File | null>(null);
 
   // Step 1: Model upload dropzone
   const onModelDrop = useCallback((acceptedFiles: File[]) => {
@@ -105,6 +106,33 @@ export default function ModelUploadPage() {
     maxFiles: 1,
   });
 
+  // EDA file dropzone
+  const onEdaDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      if (!file.name.endsWith(".pdf")) {
+        toast.error("Please upload a .pdf file");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("EDA file size must be less than 10MB");
+        return;
+      }
+      setEdaFile(file);
+      toast.success("EDA file selected");
+    }
+  }, []);
+
+  const {
+    getRootProps: getEdaRootProps,
+    getInputProps: getEdaInputProps,
+    isDragActive: isEdaDragActive,
+  } = useDropzone({
+    onDrop: onEdaDrop,
+    accept: { "application/pdf": [".pdf"] },
+    maxFiles: 1,
+  });
+
   // Handle form submission for step 1
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +161,10 @@ export default function ModelUploadPage() {
 
       if (formData.useManualFeatures && featuresFile) {
         uploadFormData.append("featuresFile", featuresFile);
+      }
+
+      if (edaFile) {
+        uploadFormData.append("edaFile", edaFile);
       }
 
       const response = await fetch("/api/models/upload", {
@@ -432,6 +464,47 @@ export default function ModelUploadPage() {
                 </div>
               </div>
             )}
+
+            {/* EDA File Upload (Optional) */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
+                EDA Report File (.pdf){" "}
+                <span className="text-secondary-400">(Optional)</span>
+              </label>
+              <div
+                {...getEdaRootProps()}
+                className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
+                  isEdaDragActive
+                    ? "border-accent-green bg-accent-green/10"
+                    : "border-border hover:border-accent-green"
+                }`}
+              >
+                <input {...getEdaInputProps()} />
+                <File className="w-12 h-12 mx-auto mb-4 text-secondary-400" />
+                {edaFile ? (
+                  <div>
+                    <p className="text-white font-medium">{edaFile.name}</p>
+                    <p className="text-sm text-secondary-400">
+                      Size: {(edaFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-white font-medium">
+                      {isEdaDragActive
+                        ? "Drop the EDA file here"
+                        : "Drag & drop EDA report here"}
+                    </p>
+                    <p className="text-sm text-secondary-400">
+                      or click to select
+                    </p>
+                    <p className="text-xs text-secondary-500 mt-2">
+                      Maximum size: 10MB
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <button
               type="submit"

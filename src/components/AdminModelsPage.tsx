@@ -28,6 +28,7 @@ type Model = {
   is_active: boolean;
   created_at: string;
   features_path: string;
+  eda_path: string | null;
   use_manual_features: boolean;
 };
 
@@ -51,6 +52,7 @@ export default function AdminModelsPage({
   });
   const [editModelFile, setEditModelFile] = useState<File | null>(null);
   const [editFeaturesFile, setEditFeaturesFile] = useState<File | null>(null);
+  const [editEdaFile, setEditEdaFile] = useState<File | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Model | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -204,6 +206,26 @@ export default function AdminModelsPage({
         console.log("ℹ️ No features path to delete");
       }
 
+      // Delete EDA file from storage
+      if (deleteTarget.eda_path) {
+        console.log("🗑️ Attempting to delete EDA file:", deleteTarget.eda_path);
+        try {
+          const { error: edaDeleteError } = await supabase.storage
+            .from("eda-reports")
+            .remove([deleteTarget.eda_path]);
+
+          if (edaDeleteError) {
+            console.warn("⚠️ EDA file delete error:", edaDeleteError);
+          } else {
+            console.log("✅ EDA file deleted successfully");
+          }
+        } catch (storageError) {
+          console.warn("⚠️ EDA file storage error:", storageError);
+        }
+      } else {
+        console.log("ℹ️ No EDA path to delete");
+      }
+
       toast.success("Model and associated files deleted successfully");
       setDeleteTarget(null);
 
@@ -331,12 +353,39 @@ export default function AdminModelsPage({
     maxFiles: 1,
   });
 
+  const onEditEdaDrop = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      if (!file.name.endsWith(".pdf")) {
+        toast.error("Please upload a .pdf file");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("EDA file size must be less than 10MB");
+        return;
+      }
+      setEditEdaFile(file);
+      toast.success("EDA file selected");
+    }
+  };
+
+  const {
+    getRootProps: getEditEdaRootProps,
+    getInputProps: getEditEdaInputProps,
+    isDragActive: isEditEdaDragActive,
+  } = useDropzone({
+    onDrop: onEditEdaDrop,
+    accept: { "application/pdf": [".pdf"] },
+    maxFiles: 1,
+  });
+
   const saveEdit = async () => {
     if (!editModel) return;
     setEditLoading(true);
     try {
       let model_path = editModel.model_path;
       let features_path = editModel.features_path;
+      let eda_path = editModel.eda_path;
       let model_hash = editModel.model_hash;
       // Upload new model file if provided
       if (editModelFile) {
@@ -367,6 +416,21 @@ export default function AdminModelsPage({
         const result = await uploadRes.json();
         features_path = result.features_path;
       }
+
+      // Upload new EDA file if provided
+      if (editEdaFile) {
+        const formData = new FormData();
+        formData.append("file", editEdaFile);
+        formData.append("modelName", editForm.name);
+        const uploadRes = await fetch("/api/models/upload-eda", {
+          method: "POST",
+          headers: { "x-wallet-address": editForm.owner_wallet },
+          body: formData,
+        });
+        if (!uploadRes.ok) throw new Error("EDA file upload failed");
+        const result = await uploadRes.json();
+        eda_path = result.eda_path;
+      }
       const authenticatedClient = getSupabaseClient(user?.wallet_address || "");
       const { error } = await authenticatedClient
         .from("models")
@@ -379,6 +443,7 @@ export default function AdminModelsPage({
           model_path,
           model_hash,
           features_path,
+          eda_path,
         })
         .eq("id", editModel.id);
       if (error) throw error;
@@ -715,6 +780,54 @@ export default function AdminModelsPage({
                       </div>
                     )}
                   </div>
+
+                  {/* EDA File Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      EDA Report File (.pdf){" "}
+                      <span className="text-secondary-400">(Optional)</span>
+                    </label>
+                    <div
+                      {...getEditEdaRootProps()}
+                      className={`border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center transition-all duration-300 ${
+                        isEditEdaDragActive
+                          ? "border-primary-500 bg-primary-500/10"
+                          : "border-border hover:border-primary-400"
+                      }`}
+                    >
+                      <input {...getEditEdaInputProps()} />
+                      <Upload className="w-10 h-10 mx-auto mb-2 text-secondary-400" />
+                      {editEdaFile ? (
+                        <div>
+                          <p className="text-white font-medium">
+                            {editEdaFile.name}
+                          </p>
+                          <p className="text-sm text-secondary-400">
+                            Size: {(editEdaFile.size / 1024 / 1024).toFixed(2)}{" "}
+                            MB
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-white font-medium">
+                            {isEditEdaDragActive
+                              ? "Drop the EDA file here"
+                              : "Drag & drop EDA file here or click to select"}
+                          </p>
+                          <p className="text-xs text-secondary-500 mt-2">
+                            Maximum size: 10MB
+                          </p>
+                          <p className="text-xs text-secondary-500 mt-1">
+                            Current:{" "}
+                            {editModel?.eda_path
+                              ? editModel.eda_path.split("/").pop()
+                              : "None"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="flex justify-end space-x-2 mt-6">
                     <button
                       type="button"

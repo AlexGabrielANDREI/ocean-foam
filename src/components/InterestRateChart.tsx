@@ -20,11 +20,12 @@ import {
   User,
   Clock,
   Building2,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import PaymentModal from "./PaymentModal";
-import LoadingModal from "./LoadingModal";
+import EdaPaymentModal from "./EdaPaymentModal";
 
 interface InterestRateData {
   Date: string;
@@ -66,16 +67,35 @@ export default function InterestRateChart({
   const [loading, setLoading] = useState(true);
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [predictionLoading, setPredictionLoading] = useState(false);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [currentTransactionHash, setCurrentTransactionHash] =
     useState<string>("");
+  const [paymentExpiryTimer, setPaymentExpiryTimer] =
+    useState<NodeJS.Timeout | null>(null);
+
+  // EDA Payment states
+  const [showEdaPaymentModal, setShowEdaPaymentModal] = useState(false);
+  const [edaPaymentComplete, setEdaPaymentComplete] = useState(false);
+  const [currentEdaTransactionHash, setCurrentEdaTransactionHash] =
+    useState<string>("");
+  const [edaPaymentRequired, setEdaPaymentRequired] = useState(true);
 
   useEffect(() => {
     loadInterestRateData();
     loadActiveModel();
+    loadLatestPrediction();
+    checkEdaPaymentStatus();
   }, []);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (paymentExpiryTimer) {
+        clearTimeout(paymentExpiryTimer);
+      }
+    };
+  }, [paymentExpiryTimer]);
 
   // Monitor transaction hash changes and run prediction when set
   useEffect(() => {
@@ -91,6 +111,21 @@ export default function InterestRateChart({
       handleRunPrediction();
     }
   }, [currentTransactionHash, paymentComplete]);
+
+  // Monitor EDA transaction hash changes and run EDA download when set
+  useEffect(() => {
+    if (
+      currentEdaTransactionHash &&
+      currentEdaTransactionHash.trim() !== "" &&
+      edaPaymentComplete
+    ) {
+      console.log(
+        "[DEBUG] EDA Transaction hash changed, running EDA download:",
+        currentEdaTransactionHash
+      );
+      handleEdaDownload();
+    }
+  }, [currentEdaTransactionHash, edaPaymentComplete]);
 
   const loadInterestRateData = async () => {
     try {
@@ -131,8 +166,52 @@ export default function InterestRateChart({
     }
   };
 
+  const loadLatestPrediction = async () => {
+    try {
+      const response = await fetch("/api/predictions/latest", {
+        headers: {
+          "x-wallet-address": user!.wallet_address,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.hasValidPrediction) {
+          console.log("[DEBUG] Loading existing prediction:", data);
+          setPredictionResult(data.prediction);
+
+          // Set timer based on actual expiry time from database
+          const timeRemaining = data.timeRemaining;
+          if (timeRemaining > 0) {
+            if (paymentExpiryTimer) {
+              clearTimeout(paymentExpiryTimer);
+            }
+
+            const timer = setTimeout(() => {
+              console.log("[DEBUG] Prediction expired, clearing result");
+              setPredictionResult(null);
+              setPaymentComplete(false);
+              setCurrentTransactionHash("");
+              toast(
+                "Prediction expired. Please make a new payment to run predictions.",
+                { icon: "ℹ️" }
+              );
+            }, timeRemaining);
+
+            setPaymentExpiryTimer(timer);
+            console.log("[DEBUG] Set timer for", timeRemaining, "ms");
+          }
+        } else {
+          console.log("[DEBUG] No valid prediction found:", data.reason);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load latest prediction:", error);
+    }
+  };
+
   const handleRunPrediction = async () => {
-    setPaymentProcessing(false);
     setPredictionLoading(true);
     setPredictionResult(null);
     try {
@@ -179,6 +258,24 @@ export default function InterestRateChart({
       setPredictionResult(result.prediction);
       toast.success("Prediction completed successfully!");
 
+      // Set timer to clear prediction result after payment expires (1 minute)
+      if (paymentExpiryTimer) {
+        clearTimeout(paymentExpiryTimer);
+      }
+
+      const timer = setTimeout(() => {
+        console.log("[DEBUG] Payment expired, clearing prediction result");
+        setPredictionResult(null);
+        setPaymentComplete(false);
+        setCurrentTransactionHash("");
+        toast(
+          "Payment expired. Please make a new payment to run predictions.",
+          { icon: "ℹ️" }
+        );
+      }, 60000); // 1 minute = 60,000ms
+
+      setPaymentExpiryTimer(timer);
+
       // Refresh payment status after successful prediction
       onRefreshPaymentStatus && onRefreshPaymentStatus();
     } catch (error) {
@@ -190,14 +287,7 @@ export default function InterestRateChart({
   };
 
   const handlePredictClick = () => {
-    console.log(
-      "[DEBUG] Predict click - paymentRequired:",
-      paymentRequired,
-      "paymentComplete:",
-      paymentComplete
-    );
     if (paymentRequired && !paymentComplete) {
-      setPaymentProcessing(true);
       onShowPaymentModal && onShowPaymentModal();
     } else {
       handleRunPrediction();
@@ -216,8 +306,13 @@ export default function InterestRateChart({
       isEmpty: !transactionHash || transactionHash.trim() === "",
     });
 
+    // Clear any existing timer
+    if (paymentExpiryTimer) {
+      clearTimeout(paymentExpiryTimer);
+      setPaymentExpiryTimer(null);
+    }
+
     setPaymentComplete(true);
-    setPaymentProcessing(true);
     setCurrentTransactionHash(transactionHash);
     console.log("[DEBUG] currentTransactionHash set to:", transactionHash);
     onPaymentSuccess && onPaymentSuccess(transactionHash);
@@ -226,6 +321,160 @@ export default function InterestRateChart({
     console.log(
       "[DEBUG] Payment success completed, prediction will run via useEffect"
     );
+  };
+
+  const checkEdaPaymentStatus = async () => {
+    try {
+      const response = await fetch("/api/eda-payment/status", {
+        headers: {
+          "x-wallet-address": user!.wallet_address,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const hasValidEdaPayment = data.edaPaymentStatus.hasValidPayment;
+        setEdaPaymentRequired(!hasValidEdaPayment);
+        console.log("[DEBUG] EDA Payment status check:", {
+          hasValidEdaPayment,
+          edaPaymentRequired: !hasValidEdaPayment,
+        });
+      } else {
+        console.error("Failed to check EDA payment status");
+        setEdaPaymentRequired(true); // Default to requiring payment if check fails
+      }
+    } catch (error) {
+      console.error("EDA Payment status check error:", error);
+      setEdaPaymentRequired(true); // Default to requiring payment if check fails
+    }
+  };
+
+  const handleEdaDownload = async () => {
+    if (!activeModel) {
+      toast("No active model available", { icon: "⚠️" });
+      return;
+    }
+
+    try {
+      console.log("[DEBUG] EDA Download - Starting download process");
+
+      // Fetch the active model details to get the EDA path
+      const response = await fetch("/api/models", {
+        headers: {
+          "x-wallet-address": user!.wallet_address,
+        },
+      });
+
+      console.log(
+        "[DEBUG] EDA Download - Models API response:",
+        response.status
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch model details");
+      }
+
+      const data = await response.json();
+      const model = data.models.find((m: any) => m.is_active);
+
+      console.log("[DEBUG] EDA Download - Active model:", {
+        modelName: model?.name,
+        hasEdaPath: !!model?.eda_path,
+        edaPath: model?.eda_path,
+      });
+
+      if (!model || !model.eda_path) {
+        toast("No EDA report available for this model", { icon: "ℹ️" });
+        return;
+      }
+
+      // Prepare headers for EDA download
+      const headers: Record<string, string> = {
+        "x-wallet-address": user!.wallet_address,
+      };
+
+      // Only include transaction hash header if it's not empty
+      if (
+        currentEdaTransactionHash &&
+        currentEdaTransactionHash.trim() !== ""
+      ) {
+        headers["x-transaction-hash"] = currentEdaTransactionHash;
+        console.log(
+          "[DEBUG] EDA Download - Adding transaction hash to headers:",
+          currentEdaTransactionHash
+        );
+      } else {
+        console.log(
+          "[DEBUG] EDA Download - No transaction hash to add to headers"
+        );
+      }
+
+      console.log("[DEBUG] EDA Download - Final headers:", headers);
+
+      // Download the EDA file
+      console.log("[DEBUG] EDA Download - Requesting file download:", {
+        url: `/api/models/download-eda?path=${encodeURIComponent(
+          model.eda_path
+        )}`,
+        edaPath: model.eda_path,
+      });
+
+      const downloadResponse = await fetch(
+        `/api/models/download-eda?path=${encodeURIComponent(model.eda_path)}`,
+        {
+          headers,
+        }
+      );
+
+      console.log("[DEBUG] EDA Download - Download response:", {
+        status: downloadResponse.status,
+        statusText: downloadResponse.statusText,
+        ok: downloadResponse.ok,
+      });
+
+      if (!downloadResponse.ok) {
+        const errorText = await downloadResponse.text();
+        console.error("[DEBUG] EDA Download - Error response:", errorText);
+        throw new Error(
+          `Failed to download EDA file: ${downloadResponse.status} ${downloadResponse.statusText}`
+        );
+      }
+
+      // Get the file blob
+      console.log("[DEBUG] EDA Download - Converting response to blob");
+      const blob = await downloadResponse.blob();
+      console.log("[DEBUG] EDA Download - Blob created:", {
+        size: blob.size,
+        type: blob.type,
+      });
+
+      // Create download link
+      console.log("[DEBUG] EDA Download - Creating download link");
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `EDA_${model.name.replace(/\s+/g, "_")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      console.log("[DEBUG] EDA Download - Download completed successfully");
+      toast("EDA report downloaded successfully!", { icon: "✅" });
+
+      // Clear EDA payment state after successful download
+      setEdaPaymentComplete(false);
+      setCurrentEdaTransactionHash("");
+      setEdaPaymentRequired(true);
+    } catch (error) {
+      console.error("[DEBUG] EDA Download - Error:", error);
+      toast(
+        `Failed to download EDA report: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        { icon: "❌" }
+      );
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -268,7 +517,7 @@ export default function InterestRateChart({
     return (
       <div className="card h-80 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-secondary-600">Loading interest rate data...</p>
         </div>
       </div>
@@ -282,7 +531,7 @@ export default function InterestRateChart({
         <div className="flex items-start space-x-6">
           {/* Jerome Powell Photo */}
           <div className="flex-shrink-0">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center overflow-hidden">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center overflow-hidden">
               <img
                 src="/jerome-powell.jpeg"
                 alt="Jerome Powell"
@@ -301,29 +550,31 @@ export default function InterestRateChart({
           {/* Meeting Information */}
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-3">
-              <h3 className="text-xl font-bold text-white">Jerome Powell</h3>
-              <span className="bg-teal-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+              <h3 className="text-xl font-bold text-foreground">
+                Jerome Powell
+              </h3>
+              <span className="bg-accent-green text-black px-3 py-1 rounded-full text-xs font-semibold">
                 Fed Chair
               </span>
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2 text-teal-300">
+                <div className="flex items-center space-x-2 text-secondary-500">
                   <Building2 className="w-4 h-4" />
                   <span className="text-sm">Federal Reserve</span>
                 </div>
-                <div className="flex items-center space-x-2 text-teal-300">
+                <div className="flex items-center space-x-2 text-secondary-500">
                   <Clock className="w-4 h-4" />
                   <span className="text-sm">Next FOMC Meeting</span>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-4 rounded-xl border border-blue-500/20">
-                <h4 className="font-semibold text-white mb-2">
-                  September 16–17, 2025
+              <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4 rounded-xl border border-blue-500/20">
+                <h4 className="font-semibold text-foreground mb-2">
+                  October 28–29, 2025
                 </h4>
-                <p className="text-sm text-teal-200 leading-relaxed">
+                <p className="text-sm text-secondary-600 leading-relaxed">
                   The Federal Open Market Committee will convene to assess
                   economic conditions and determine the target range for the
                   federal funds rate. This meeting will be crucial for
@@ -336,23 +587,23 @@ export default function InterestRateChart({
       </div>
 
       {/* Chart with Integrated Prediction */}
-      <div className="card">
+      <div className="card overflow-hidden">
         <div className="card-header mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-foreground">
                   US Federal Funds Rate
                 </h3>
-                <p className="text-sm text-teal-200">
+                <p className="text-sm text-secondary-600">
                   Historical trends & AI-powered predictions
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 text-sm text-teal-300">
+            <div className="flex items-center space-x-2 text-sm text-secondary-500">
               <Calendar className="w-4 h-4" />
               <span>1998 - 2024</span>
             </div>
@@ -367,8 +618,8 @@ export default function InterestRateChart({
             >
               <defs>
                 <linearGradient id="rateGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#024b86" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#024b86" stopOpacity={0.05} />
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05} />
                 </linearGradient>
               </defs>
               <CartesianGrid
@@ -393,13 +644,13 @@ export default function InterestRateChart({
               <Area
                 type="monotone"
                 dataKey="rate"
-                stroke="#024b86"
+                stroke="#3b82f6"
                 strokeWidth={3}
                 fill="url(#rateGradient)"
                 dot={false}
                 activeDot={{
                   r: 6,
-                  fill: "#024b86",
+                  fill: "#3b82f6",
                   stroke: "#ffffff",
                   strokeWidth: 2,
                 }}
@@ -411,7 +662,7 @@ export default function InterestRateChart({
           {chartData.length > 0 && (
             <div className="absolute top-4 right-4 glass px-4 py-2 rounded-xl border border-border">
               <div className="flex items-center space-x-2">
-                <Percent className="w-4 h-4 text-teal-500" />
+                <Percent className="w-4 h-4 text-accent-green" />
                 <div>
                   <p className="text-xs text-secondary-500">Current Rate</p>
                   <p className="text-lg font-bold text-foreground">
@@ -421,139 +672,157 @@ export default function InterestRateChart({
               </div>
             </div>
           )}
-        </div>
 
-        {/* Action Buttons Below Chart */}
-        <div className="mt-6 flex items-center justify-center space-x-4">
+          {/* Prediction Button Overlay */}
           {activeModel && (
-            <button
-              onClick={handlePredictClick}
-              className="btn-primary flex items-center space-x-2 shadow-lg"
-              disabled={
-                predictionLoading ||
-                paymentProcessing ||
-                (paymentRequired && paymentComplete) ||
-                showPaymentModal
-              }
-            >
-              {paymentProcessing ? (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Payment in Progress...</span>
-                </>
-              ) : predictionLoading ? (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Prediction in Progress...</span>
-                </>
-              ) : paymentRequired && paymentComplete ? (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Payment Complete</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Predict Next Rate</span>
-                </>
-              )}
-            </button>
-          )}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-3">
+              <button
+                onClick={handlePredictClick}
+                className="btn-primary flex items-center space-x-2 shadow-lg"
+                disabled={
+                  predictionLoading ||
+                  (paymentRequired && paymentComplete) ||
+                  (showPaymentModal && paymentRequired)
+                }
+              >
+                {predictionLoading ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>Predicting...</span>
+                  </>
+                ) : paymentRequired && paymentComplete ? (
+                  <>
+                    <Play className="w-4 h-4" />
+                    <span>Payment Complete</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    <span>Predict Next Rate</span>
+                  </>
+                )}
+              </button>
 
-          <button
-            onClick={() => {
-              toast("EDA feature coming soon!", {
-                icon: "📊",
-                duration: 3000,
-              });
-            }}
-            className="btn-secondary flex items-center space-x-2 shadow-lg"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-            <span>Explore EDA</span>
-          </button>
+              <button
+                onClick={() => {
+                  if (edaPaymentRequired && !edaPaymentComplete) {
+                    setShowEdaPaymentModal(true);
+                  } else {
+                    handleEdaDownload();
+                  }
+                }}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 shadow-lg transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Explore EDA</span>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Payment Modal - Outside of button container to ensure proper overlay */}
+        {paymentRequired && (
+          <PaymentModal
+            open={!!showPaymentModal}
+            onClose={() => onShowPaymentModal && onShowPaymentModal()}
+            onPaid={handlePaymentSuccessInternal}
+          />
+        )}
+
+        {/* EDA Payment Modal */}
+        {showEdaPaymentModal && (
+          <EdaPaymentModal
+            open={showEdaPaymentModal}
+            onClose={() => setShowEdaPaymentModal(false)}
+            onPaid={(transactionHash: string) => {
+              console.log(
+                "[DEBUG] EDA Payment success, setting transaction hash:",
+                transactionHash
+              );
+              setEdaPaymentComplete(true);
+              setCurrentEdaTransactionHash(transactionHash);
+              setShowEdaPaymentModal(false);
+              setEdaPaymentRequired(false);
+              toast.success(
+                "EDA payment successful! Download will start automatically."
+              );
+            }}
+          />
+        )}
 
         {/* Prediction Result */}
         {predictionResult && (
-          <div className="mt-6 p-6 rounded-xl bg-gradient-to-r from-teal-500/10 to-teal-500/10 border border-teal-500/20">
-            <h4 className="font-semibold text-white mb-4 flex items-center space-x-2">
-              <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
+          <div className="mt-6 p-6 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+            <h4 className="font-semibold text-foreground mb-4 flex items-center space-x-2">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
               <span>AI Prediction Result</span>
             </h4>
 
-            {/* Main Prediction */}
-            <div className="mb-6 text-center">
-              <div className="text-3xl font-bold text-teal-400 mb-2">
-                {predictionResult.prediction}
+            {/* Main Prediction Display */}
+            <div className="text-center mb-6">
+              <div className="text-4xl font-bold text-teal-400 mb-2">
+                {typeof predictionResult.prediction === "number"
+                  ? `${
+                      predictionResult.prediction > 0 ? "+" : ""
+                    }${predictionResult.prediction.toFixed(2)}%`
+                  : predictionResult.prediction}
               </div>
-              <div className="text-sm text-teal-200">Predicted Rate Change</div>
-              <div className="text-xs text-gray-400 mt-1">
-                Confidence: {(predictionResult.confidence * 100).toFixed(1)}%
+              <div className="text-sm text-slate-300 mb-1">
+                Predicted Rate Change
+              </div>
+              <div className="text-xs text-slate-400">
+                Confidence:{" "}
+                {predictionResult.confidence
+                  ? `${(predictionResult.confidence * 100).toFixed(1)}%`
+                  : "N/A"}
               </div>
             </div>
 
-            {/* Top 3 Probabilities */}
+            {/* Top 3 Scenarios */}
             {predictionResult.probabilities && (
               <div className="space-y-3">
-                <h5 className="text-sm font-medium text-white mb-3">
+                <h5 className="text-sm font-medium text-slate-300 mb-3">
                   Top 3 Scenarios
                 </h5>
                 {Object.entries(predictionResult.probabilities)
                   .sort(([, a], [, b]) => (b as number) - (a as number))
                   .slice(0, 3)
-                  .map(([change, probability], index) => (
-                    <div
-                      key={change}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                            index === 0
-                              ? "bg-teal-500 text-white"
-                              : index === 1
-                              ? "bg-blue-500 text-white"
-                              : "bg-purple-500 text-white"
-                          }`}
-                        >
-                          {index + 1}
-                        </div>
-                        <span className="text-white font-medium">{change}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-16 bg-gray-700 rounded-full h-2">
+                  .map(([scenario, probability], index) => {
+                    const colors = [
+                      "text-teal-400",
+                      "text-blue-400",
+                      "text-purple-400",
+                    ];
+                    const bgColors = [
+                      "bg-teal-500",
+                      "bg-blue-500",
+                      "bg-purple-500",
+                    ];
+                    const color = colors[index] || "text-gray-400";
+                    const bgColor = bgColors[index] || "bg-gray-500";
+
+                    return (
+                      <div
+                        key={scenario}
+                        className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50"
+                      >
+                        <div className="flex items-center space-x-3">
                           <div
-                            className="h-2 rounded-full transition-all duration-500"
-                            style={{
-                              width: `${(probability as number) * 100}%`,
-                              backgroundColor:
-                                index === 0
-                                  ? "#14b8a6"
-                                  : index === 1
-                                  ? "#3b82f6"
-                                  : "#a855f7",
-                            }}
+                            className={`w-2 h-2 ${bgColor} rounded-full`}
                           ></div>
+                          <span className="text-sm text-slate-300">
+                            {index + 1}
+                          </span>
+                          <span className={`text-sm font-medium ${color}`}>
+                            {scenario}
+                          </span>
                         </div>
-                        <span className="text-sm text-gray-300 min-w-[3rem]">
+                        <span className={`text-sm font-medium ${color}`}>
                           {((probability as number) * 100).toFixed(1)}%
                         </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -566,25 +835,6 @@ export default function InterestRateChart({
             <span>Federal Funds Rate</span>
           </div>
         </div>
-
-        {/* Payment Modal */}
-        {paymentRequired && (
-          <PaymentModal
-            open={!!showPaymentModal}
-            onClose={() => {
-              setPaymentProcessing(false);
-              onShowPaymentModal && onShowPaymentModal();
-            }}
-            onPaid={handlePaymentSuccessInternal}
-          />
-        )}
-
-        {/* Model Processing Loading Modal */}
-        <LoadingModal
-          open={predictionLoading}
-          title="Processing AI Model"
-          message="Please wait while we run your prediction through our advanced AI models..."
-        />
       </div>
     </div>
   );

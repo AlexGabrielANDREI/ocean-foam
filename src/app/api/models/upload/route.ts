@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string;
     const modelFile = formData.get("modelFile") as File;
     const featuresFile = formData.get("featuresFile") as File | null;
+    const edaFile = formData.get("edaFile") as File | null;
     const useManualFeatures = formData.get("useManualFeatures") === "true";
     const ownerWalletAddress = (
       (formData.get("ownerWalletAddress") as string) || walletAddress
@@ -215,6 +216,7 @@ export async function POST(request: NextRequest) {
     })}`;
     const modelFilePath = `${modelFolder}/model.pkl`;
     const featuresFilePath = `${modelFolder}/features.json`;
+    const edaFilePath = `${modelFolder}/eda.pdf`;
 
     // Upload model file (always overwrite)
     await retryUpload(() =>
@@ -235,6 +237,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Upload EDA file if present
+    let edaPath = null;
+    if (edaFile) {
+      const edaBuffer = await edaFile.arrayBuffer();
+      await retryUpload(() =>
+        supabase.storage.from("eda-reports").upload(edaFilePath, edaBuffer, {
+          upsert: true,
+          contentType: "application/pdf",
+        })
+      );
+      edaPath = edaFilePath;
+    }
+
     // Create model record in database
     console.log("🔍 Upload API - Creating model record in database");
     const { data: model, error: dbError } = await supabase
@@ -246,6 +261,7 @@ export async function POST(request: NextRequest) {
         model_path: modelFilePath,
         features_path:
           useManualFeatures && featuresBuffer ? featuresFilePath : null,
+        eda_path: edaPath,
         model_hash: modelHash,
         owner_wallet: ownerWalletAddress,
         is_active: false,

@@ -1,0 +1,67 @@
+{
+  "model_overview": {
+    "objective": "Predict FOMC rate decisions (cut, hold, hike) with class probabilities",
+    "approach": "Multiclass classification using macroeconomic indicators, FOMC communications (NLP), and historical outcomes",
+    "selected_model": "Random Forest (best accuracy: ~0.88)",
+    "explanation_tools": ["SHAP", "LIME"]
+  },
+  "data_sources": {
+    "macroeconomic": [
+      "FRED indicators (CPI, unemployment, housing starts, GDP, consumer sentiment)"
+    ],
+    "policy_outcomes": ["FOMC decision history (Investing.com)"],
+    "communications": [
+      "FOMC statements",
+      "FOMC minutes",
+      "NLP features: sentiment (VADER, FinBERT), TF-IDF, BERTopic"
+    ],
+    "timeframe": "1998–present, aligned to FOMC decision dates"
+  },
+  "feature_importance": {
+    "method": "Average SHAP values from cross-validation",
+    "top_features": [
+      { "feature": "Consumer Sentiment Index", "importance": 0.23 },
+      { "feature": "Housing Starts", "importance": 0.18 },
+      { "feature": "Eurozone CPI", "importance": 0.15 },
+      { "feature": "Real GDP Growth", "importance": 0.12 },
+      { "feature": "Fed Funds Rate (lagged)", "importance": 0.1 },
+      { "feature": "Unemployment Rate", "importance": 0.09 },
+      { "feature": "PCE Inflation", "importance": 0.07 },
+      {
+        "feature": "FOMC Statement Sentiment (hawkish/dovish)",
+        "importance": 0.06
+      }
+    ],
+    "note": "Values are normalized to sum to 1.0 and represent global feature importance."
+  },
+  "model_training": {
+    "imbalance_handling": ["SMOTE oversampling", "Class weights"],
+    "validation": "Stratified split with cross-validation",
+    "hyperparameter_tuning": "Grid Search CV across Random Forest, XGBoost, LightGBM, CatBoost"
+  },
+  "interpretability": {
+    "drivers": "Top features often include Consumer Sentiment, Housing Starts, CPI, GDP, and prior Fed Funds levels",
+    "visualizations": [
+      "SHAP summary plots",
+      "LIME local explanations for each prediction"
+    ]
+  },
+  "output_explanation": {
+    "format": "For each decision, the model outputs class probabilities (cut/hold/hike)",
+    "supporting_information": [
+      "Key drivers (most influential features)",
+      "Macro snapshot (CPI, unemployment, sentiment, housing starts)",
+      "Recent FOMC sentiment analysis (hawkish/dovish tone)",
+      "Historical analogues (past decisions under similar conditions)"
+    ],
+    "confidence": "Probabilities are calibrated; high when a class is dominant, lower when uncertainty is high"
+  },
+  "limitations": {
+    "challenges": [
+      "Class imbalance (holds dominate history)",
+      "Unpredictable shocks (pandemics, geopolitical crises)",
+      "Differences in release frequency of data (monthly/quarterly vs. daily)"
+    ],
+    "note": "Predictions are probabilistic and should be viewed as informed signals, not certainties."
+  }
+}
