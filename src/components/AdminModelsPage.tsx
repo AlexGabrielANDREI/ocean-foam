@@ -383,76 +383,48 @@ export default function AdminModelsPage({
     if (!editModel) return;
     setEditLoading(true);
     try {
-      let model_path = editModel.model_path;
-      let features_path = editModel.features_path;
-      let eda_path = editModel.eda_path;
-      let model_hash = editModel.model_hash;
-      // Upload new model file if provided
+      const formData = new FormData();
+      formData.append("modelId", editModel.id);
+      formData.append("name", editForm.name);
+      formData.append("description", editForm.description);
+      formData.append("version", editForm.version.toString());
+      formData.append("ownerWallet", editForm.owner_wallet);
+      formData.append(
+        "useManualFeatures",
+        editForm.use_manual_features.toString()
+      );
+
+      // Add files if provided
       if (editModelFile) {
-        const formData = new FormData();
-        formData.append("file", editModelFile);
-        formData.append("modelName", editForm.name);
-        const uploadRes = await fetch("/api/models/upload", {
-          method: "POST",
-          headers: { "x-wallet-address": editForm.owner_wallet },
-          body: formData,
-        });
-        if (!uploadRes.ok) throw new Error("Model file upload failed");
-        const result = await uploadRes.json();
-        model_path = result.model_path;
-        model_hash = result.model_hash;
+        formData.append("modelFile", editModelFile);
       }
-      // Upload new features file if provided
       if (editFeaturesFile) {
-        const formData = new FormData();
-        formData.append("file", editFeaturesFile);
-        formData.append("modelName", editForm.name); // <-- Add modelName
-        const uploadRes = await fetch("/api/models/upload-features", {
-          method: "POST",
-          headers: { "x-wallet-address": editForm.owner_wallet },
-          body: formData,
-        });
-        if (!uploadRes.ok) throw new Error("Features file upload failed");
-        const result = await uploadRes.json();
-        features_path = result.features_path;
+        formData.append("featuresFile", editFeaturesFile);
+      }
+      if (editEdaFile) {
+        formData.append("edaFile", editEdaFile);
       }
 
-      // Upload new EDA file if provided
-      if (editEdaFile) {
-        const formData = new FormData();
-        formData.append("file", editEdaFile);
-        formData.append("modelName", editForm.name);
-        const uploadRes = await fetch("/api/models/upload-eda", {
-          method: "POST",
-          headers: { "x-wallet-address": editForm.owner_wallet },
-          body: formData,
-        });
-        if (!uploadRes.ok) throw new Error("EDA file upload failed");
-        const result = await uploadRes.json();
-        eda_path = result.eda_path;
+      const response = await fetch("/api/models/update", {
+        method: "POST",
+        headers: { "x-wallet-address": user?.wallet_address || "" },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update model");
       }
-      const authenticatedClient = getSupabaseClient(user?.wallet_address || "");
-      const { error } = await authenticatedClient
-        .from("models")
-        .update({
-          name: editForm.name,
-          description: editForm.description,
-          version: editForm.version,
-          owner_wallet: editForm.owner_wallet,
-          use_manual_features: editForm.use_manual_features,
-          model_path,
-          model_hash,
-          features_path,
-          eda_path,
-        })
-        .eq("id", editModel.id);
-      if (error) throw error;
+
+      const result = await response.json();
       toast.success("Model updated successfully");
       closeEditModal();
       fetchModels();
     } catch (error) {
       console.error("Error updating model:", error);
-      toast.error("Failed to update model");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update model"
+      );
     } finally {
       setEditLoading(false);
     }

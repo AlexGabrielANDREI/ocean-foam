@@ -31,6 +31,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Safety mechanism to prevent infinite loading
+  useEffect(() => {
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.log("[DEBUG] Safety timeout reached, forcing loading to false");
+        setLoading(false);
+      }
+    }, 4000); // 4 second safety timeout
+
+    return () => clearTimeout(safetyTimeout);
+  }, [loading]);
+
   // Check for existing wallet connection on mount
   useEffect(() => {
     const checkWalletConnection = async () => {
@@ -60,9 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Check if MetaMask is connected and the address matches
           if (window.ethereum) {
             try {
-              const accounts = await window.ethereum.request({
+              // Add timeout for MetaMask request
+              const accountsPromise = window.ethereum.request({
                 method: "eth_accounts",
               });
+
+              const metamaskTimeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("MetaMask timeout")), 2000)
+              );
+
+              const accounts = (await Promise.race([
+                accountsPromise,
+                metamaskTimeoutPromise,
+              ])) as string[];
+
               if (
                 accounts.length > 0 &&
                 accounts[0].toLowerCase() === storedWalletAddress.toLowerCase()
@@ -79,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   .single();
 
                 const timeoutPromise = new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error("Supabase timeout")), 3000)
+                  setTimeout(() => reject(new Error("Supabase timeout")), 2000)
                 );
 
                 const { data: userData, error: userError } =
@@ -168,11 +191,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("[DEBUG] Calling checkWalletConnection");
     checkWalletConnection();
 
-    // Fallback timeout to ensure loading doesn't get stuck
+    // Reduced fallback timeout to ensure loading doesn't get stuck
     const timeoutId = setTimeout(() => {
       console.log("[DEBUG] Fallback timeout reached, setting loading to false");
       setLoading(false);
-    }, 5000); // 5 second timeout
+    }, 3000); // Reduced to 3 second timeout
 
     return () => clearTimeout(timeoutId);
   }, []);

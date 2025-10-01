@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const modelName = formData.get("modelName") as string;
+    const modelId = formData.get("modelId") as string;
 
     if (!file || !modelName) {
       return NextResponse.json(
@@ -54,6 +55,35 @@ export async function POST(request: NextRequest) {
         { error: "File size must be less than 10MB" },
         { status: 400 }
       );
+    }
+
+    // Delete old EDA file if modelId is provided (for editing existing model)
+    if (modelId) {
+      try {
+        // Get the current model to find the old EDA path
+        const { data: model, error: modelError } = await supabase
+          .from("models")
+          .select("eda_path")
+          .eq("id", modelId)
+          .single();
+
+        if (!modelError && model?.eda_path) {
+          // Delete the old EDA file
+          const { error: deleteError } = await supabase.storage
+            .from("eda-reports")
+            .remove([model.eda_path]);
+
+          if (deleteError) {
+            console.warn("Failed to delete old EDA file:", deleteError);
+            // Continue with upload even if deletion fails
+          } else {
+            console.log("Successfully deleted old EDA file:", model.eda_path);
+          }
+        }
+      } catch (error) {
+        console.warn("Error deleting old EDA file:", error);
+        // Continue with upload even if deletion fails
+      }
     }
 
     // Create file path
