@@ -1,8 +1,11 @@
 import { ethers } from "ethers";
 import contractAbi from "./contract-abi.json";
 
-const CONTRACT_ADDRESS = "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
+const CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
+  "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
 const ALCHEMY_URL =
+  process.env.ALCHEMY_URL ||
   "https://eth-sepolia.g.alchemy.com/v2/Rw4dHAu8A_9De5-3lRDgr";
 
 export async function getPaymentPrice(): Promise<string> {

@@ -4,14 +4,19 @@ import { supabase, getSupabaseClient } from "./supabase";
 import { getPaymentPrice } from "./contract";
 
 const ALCHEMY_URL =
+  process.env.ALCHEMY_URL ||
   "https://eth-sepolia.g.alchemy.com/v2/Rw4dHAu8A_9De5-3lRDgr";
-const CONTRACT_ADDRESS = "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
+const CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
+  "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
 
-// Payment validation time window (1 minute for testing)
-const PAYMENT_VALIDITY_HOURS = 1 / 60; // 1 minute
-
-// EDA payment validation time window (5 minutes for EDA access)
-const EDA_PAYMENT_VALIDITY_HOURS = 5 / 60; // 5 minutes
+// Payment validation time windows from environment variables
+const PAYMENT_VALIDITY_HOURS = parseFloat(
+  process.env.PAYMENT_VALIDITY_HOURS || "0.0167"
+); // Default: 1 minute
+const EDA_PAYMENT_VALIDITY_HOURS = parseFloat(
+  process.env.EDA_PAYMENT_VALIDITY_HOURS || "0.0833"
+); // Default: 5 minutes
 
 export interface PaymentValidationResult {
   isValid: boolean;
