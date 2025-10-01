@@ -81,6 +81,9 @@ export default function Dashboard() {
             onRefreshPaymentStatus={() =>
               topNavigationRef.current?.refreshPaymentStatus()
             }
+            onRefreshEdaPaymentStatus={() =>
+              topNavigationRef.current?.refreshEdaPaymentStatus()
+            }
           />
         );
       case "admin":

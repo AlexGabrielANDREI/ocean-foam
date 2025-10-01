@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { createClient } from "@supabase/supabase-js";
 import { supabase, getSupabaseClient } from "./supabase";
 import { getPaymentPrice } from "./contract";
 
@@ -462,10 +463,10 @@ export async function verifyEdaPayment(
       "[DEBUG] No EDA transaction hash provided, checking database for recent EDA payment"
     );
 
-    // Use wallet-specific Supabase client to pass RLS policies
+    // Use wallet-specific client for RLS policies (same as predictions)
     const supabaseWithWallet = getSupabaseClient(walletAddress);
     console.log(
-      "[DEBUG] Using wallet-specific Supabase client for EDA payment:",
+      "[DEBUG] Using wallet-specific client for EDA payment:",
       walletAddress
     );
 
@@ -716,8 +717,14 @@ export async function recordEdaAccessTransaction(
   transactionHash: string
 ): Promise<boolean> {
   try {
-    // First get the user's wallet address to use the correct Supabase client
-    const { data: userData, error: userError } = await supabase
+    // Use service role key for user lookup (bypasses RLS)
+    const { createClient } = require("@supabase/supabase-js");
+    const serviceRoleClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: userData, error: userError } = await serviceRoleClient
       .from("users")
       .select("wallet_address")
       .eq("id", userId)
@@ -731,7 +738,7 @@ export async function recordEdaAccessTransaction(
       return false;
     }
 
-    // Use wallet-specific client for RLS policies
+    // Use wallet-specific client for RLS policies (same as predictions)
     const supabaseWithWallet = getSupabaseClient(userData.wallet_address);
 
     const { error } = await supabaseWithWallet.from("eda_access").insert({
@@ -766,7 +773,7 @@ export async function getUserEdaPaymentStatus(walletAddress: string): Promise<{
       walletAddress
     );
 
-    // Use wallet-specific client for RLS policies
+    // Use wallet-specific client for RLS policies (same as predictions)
     const supabaseWithWallet = getSupabaseClient(walletAddress);
 
     // Get user ID first

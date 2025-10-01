@@ -5,19 +5,27 @@ import { Bell, Settings, Wallet, LogOut } from "lucide-react";
 import PaymentStatusIndicator, {
   PaymentStatusIndicatorRef,
 } from "./PaymentStatusIndicator";
+import EdaPaymentStatusIndicator, {
+  EdaPaymentStatusIndicatorRef,
+} from "./EdaPaymentStatusIndicator";
 import { forwardRef, useRef, useImperativeHandle } from "react";
 
 export interface TopNavigationRef {
   refreshPaymentStatus: () => void;
+  refreshEdaPaymentStatus: () => void;
 }
 
 const TopNavigation = forwardRef<TopNavigationRef>((props, ref) => {
   const { user, disconnect } = useAuth();
   const paymentStatusRef = useRef<PaymentStatusIndicatorRef>(null);
+  const edaPaymentStatusRef = useRef<EdaPaymentStatusIndicatorRef>(null);
 
   useImperativeHandle(ref, () => ({
     refreshPaymentStatus: () => {
       paymentStatusRef.current?.refresh();
+    },
+    refreshEdaPaymentStatus: () => {
+      edaPaymentStatusRef.current?.refresh();
     },
   }));
 
@@ -31,6 +39,9 @@ const TopNavigation = forwardRef<TopNavigationRef>((props, ref) => {
         <div className="flex items-center space-x-3">
           {/* Payment Status Indicator */}
           <PaymentStatusIndicator ref={paymentStatusRef} />
+
+          {/* EDA Payment Status Indicator */}
+          <EdaPaymentStatusIndicator ref={edaPaymentStatusRef} />
 
           {/* Notifications */}
           <button className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all duration-300">

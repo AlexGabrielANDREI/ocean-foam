@@ -1,0 +1,168 @@
+import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Clock, CheckCircle, XCircle, BarChart3 } from "lucide-react";
+import toast from "react-hot-toast";
+
+interface EdaPaymentStatus {
+  hasValidPayment: boolean;
+  lastPaymentTime?: Date;
+  transactionHash?: string;
+  expiresAt?: Date;
+}
+
+export interface EdaPaymentStatusIndicatorRef {
+  refresh: () => void;
+}
+
+const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
+  (props, ref) => {
+    const { user } = useAuth();
+    const [edaPaymentStatus, setEdaPaymentStatus] =
+      useState<EdaPaymentStatus | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    const checkEdaPaymentStatus = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/eda-payment/status", {
+          headers: {
+            "x-wallet-address": user!.wallet_address,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[DEBUG] EDA Payment status API response:", data);
+
+          // Convert date strings to Date objects
+          const edaPaymentStatus: EdaPaymentStatus = {
+            ...data.edaPaymentStatus,
+            lastPaymentTime: data.edaPaymentStatus.lastPaymentTime
+              ? new Date(data.edaPaymentStatus.lastPaymentTime)
+              : undefined,
+            expiresAt: data.edaPaymentStatus.expiresAt
+              ? new Date(data.edaPaymentStatus.expiresAt)
+              : undefined,
+          };
+
+          console.log("[DEBUG] Processed EDA payment status:", {
+            hasValidPayment: edaPaymentStatus.hasValidPayment,
+            lastPaymentTime: edaPaymentStatus.lastPaymentTime?.toISOString(),
+            expiresAt: edaPaymentStatus.expiresAt?.toISOString(),
+            transactionHash: edaPaymentStatus.transactionHash,
+            now: new Date().toISOString(),
+            timeRemaining: edaPaymentStatus.expiresAt
+              ? edaPaymentStatus.expiresAt.getTime() - new Date().getTime()
+              : "N/A",
+          });
+
+          setEdaPaymentStatus(edaPaymentStatus);
+        } else {
+          console.error("Failed to check EDA payment status");
+        }
+      } catch (error) {
+        console.error("EDA Payment status check error:", error);
+        toast.error("Failed to check EDA payment status");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Expose refresh function to parent components
+    useImperativeHandle(ref, () => ({
+      refresh: () => {
+        console.log("[DEBUG] EdaPaymentStatusIndicator refresh called");
+        checkEdaPaymentStatus();
+      },
+    }));
+
+    useEffect(() => {
+      if (user) {
+        checkEdaPaymentStatus();
+      }
+    }, [user]);
+
+    if (loading) {
+      return (
+        <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <span className="text-xs text-slate-300">Checking...</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (!edaPaymentStatus) {
+      return null;
+    }
+
+    const formatTimeRemaining = (expiresAt: Date) => {
+      const now = new Date();
+      const timeLeft = expiresAt.getTime() - now.getTime();
+
+      if (timeLeft <= 0) {
+        return "Expired";
+      }
+
+      const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else {
+        return `${minutes}m`;
+      }
+    };
+
+    return (
+      <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
+        <div className="flex items-center space-x-2">
+          {edaPaymentStatus.hasValidPayment ? (
+            <CheckCircle className="w-3 h-3 text-blue-500" />
+          ) : (
+            <XCircle className="w-3 h-3 text-purple-400" />
+          )}
+          <span className="text-xs font-medium text-slate-200">
+            {edaPaymentStatus.hasValidPayment ? "EDA Active" : "EDA Inactive"}
+          </span>
+
+          {edaPaymentStatus.hasValidPayment && edaPaymentStatus.expiresAt && (
+            <>
+              <span className="text-slate-400">•</span>
+              <div className="flex items-center space-x-1 text-xs text-slate-300">
+                <Clock className="w-3 h-3" />
+                <span>{formatTimeRemaining(edaPaymentStatus.expiresAt)}</span>
+              </div>
+            </>
+          )}
+
+          {!edaPaymentStatus.hasValidPayment && (
+            <>
+              <span className="text-slate-400">•</span>
+              <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-1 rounded">
+                Payment required for EDA access
+              </span>
+            </>
+          )}
+
+          {/* Debug refresh button - remove after testing */}
+          <button
+            onClick={() => {
+              console.log("[DEBUG] Manual EDA refresh clicked");
+              checkEdaPaymentStatus();
+            }}
+            className="text-xs text-slate-400 hover:text-slate-200 ml-2"
+            title="Refresh EDA payment status"
+          >
+            ↻
+          </button>
+        </div>
+      </div>
+    );
+  }
+);
+
+EdaPaymentStatusIndicator.displayName = "EdaPaymentStatusIndicator";
+
+export default EdaPaymentStatusIndicator;

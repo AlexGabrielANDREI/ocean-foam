@@ -53,6 +53,7 @@ interface InterestRateChartProps {
   onShowPaymentModal?: () => void;
   onPaymentSuccess?: (transactionHash: string) => void;
   onRefreshPaymentStatus?: () => void;
+  onRefreshEdaPaymentStatus?: () => void;
 }
 
 export default function InterestRateChart({
@@ -61,6 +62,7 @@ export default function InterestRateChart({
   onShowPaymentModal,
   onPaymentSuccess,
   onRefreshPaymentStatus,
+  onRefreshEdaPaymentStatus,
 }: InterestRateChartProps) {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<ChartData[]>([]);
@@ -86,7 +88,7 @@ export default function InterestRateChart({
     loadActiveModel();
     loadLatestPrediction();
     checkEdaPaymentStatus();
-  }, []);
+  }, [user]); // Re-run when user changes (login/logout)
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -335,9 +337,17 @@ export default function InterestRateChart({
         const data = await response.json();
         const hasValidEdaPayment = data.edaPaymentStatus.hasValidPayment;
         setEdaPaymentRequired(!hasValidEdaPayment);
+
+        // If we have a valid payment, also set the transaction hash for future downloads
+        if (hasValidEdaPayment && data.edaPaymentStatus.transactionHash) {
+          setCurrentEdaTransactionHash(data.edaPaymentStatus.transactionHash);
+          setEdaPaymentComplete(true);
+        }
+
         console.log("[DEBUG] EDA Payment status check:", {
           hasValidEdaPayment,
           edaPaymentRequired: !hasValidEdaPayment,
+          transactionHash: data.edaPaymentStatus.transactionHash,
         });
       } else {
         console.error("Failed to check EDA payment status");
@@ -462,10 +472,11 @@ export default function InterestRateChart({
       console.log("[DEBUG] EDA Download - Download completed successfully");
       toast("EDA report downloaded successfully!", { icon: "✅" });
 
-      // Clear EDA payment state after successful download
-      setEdaPaymentComplete(false);
-      setCurrentEdaTransactionHash("");
-      setEdaPaymentRequired(true);
+      // Refresh EDA payment status to ensure UI reflects current state
+      await checkEdaPaymentStatus();
+
+      // Also refresh the EDA payment status in the top navigation
+      onRefreshEdaPaymentStatus?.();
     } catch (error) {
       console.error("[DEBUG] EDA Download - Error:", error);
       toast(
@@ -734,7 +745,7 @@ export default function InterestRateChart({
           <EdaPaymentModal
             open={showEdaPaymentModal}
             onClose={() => setShowEdaPaymentModal(false)}
-            onPaid={(transactionHash: string) => {
+            onPaid={async (transactionHash: string) => {
               console.log(
                 "[DEBUG] EDA Payment success, setting transaction hash:",
                 transactionHash
@@ -743,6 +754,36 @@ export default function InterestRateChart({
               setCurrentEdaTransactionHash(transactionHash);
               setShowEdaPaymentModal(false);
               setEdaPaymentRequired(false);
+
+              // Record the EDA access transaction immediately after payment
+              try {
+                const response = await fetch("/api/eda-payment/record", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-wallet-address": user!.wallet_address,
+                  },
+                  body: JSON.stringify({
+                    transactionHash: transactionHash,
+                  }),
+                });
+
+                if (response.ok) {
+                  console.log(
+                    "[DEBUG] EDA access transaction recorded successfully"
+                  );
+                } else {
+                  console.error(
+                    "[DEBUG] Failed to record EDA access transaction"
+                  );
+                }
+              } catch (error) {
+                console.error(
+                  "[DEBUG] Error recording EDA access transaction:",
+                  error
+                );
+              }
+
               toast.success(
                 "EDA payment successful! Download will start automatically."
               );

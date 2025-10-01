@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { supabase, getSupabaseClient } from "@/lib/supabase";
 import {
   verifyEdaPayment,
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     console.log("[DEBUG] EDA Download - EDA Payment validation successful");
 
-    // Get user details for recording access
+    // Get user details for recording access (use wallet-specific client like predictions)
     const supabaseWithWallet = getSupabaseClient(walletAddress);
     const { data: user, error: userError } = await supabaseWithWallet
       .from("users")
@@ -80,23 +81,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Record EDA access transaction if payment was successful
-    if (paymentValidation.transactionHash) {
-      console.log(
-        "[DEBUG] EDA Download - Recording EDA access transaction:",
-        paymentValidation.transactionHash
-      );
-      const recordSuccess = await recordEdaAccessTransaction(
-        user.id,
-        paymentValidation.transactionHash
-      );
+    // Record EDA access transaction for every successful download
+    // This ensures the 5-minute window is tracked properly
+    const transactionHashToRecord =
+      paymentValidation.transactionHash || "eda_access_" + Date.now();
 
-      if (!recordSuccess) {
-        console.log(
-          "[DEBUG] EDA Download - Failed to record EDA access transaction"
-        );
-        // Continue anyway, don't fail the download
-      }
+    console.log(
+      "[DEBUG] EDA Download - Recording EDA access transaction:",
+      transactionHashToRecord
+    );
+    const recordSuccess = await recordEdaAccessTransaction(
+      user.id,
+      transactionHashToRecord
+    );
+
+    if (!recordSuccess) {
+      console.log(
+        "[DEBUG] EDA Download - Failed to record EDA access transaction"
+      );
+      // Continue anyway, don't fail the download
     }
 
     console.log("[DEBUG] EDA Download - Access granted");

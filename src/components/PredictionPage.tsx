@@ -27,10 +27,12 @@ interface Model {
 
 interface PredictionPageProps {
   onRefreshPaymentStatus?: () => void;
+  onRefreshEdaPaymentStatus?: () => void;
 }
 
 export default function PredictionPage({
   onRefreshPaymentStatus,
+  onRefreshEdaPaymentStatus,
 }: PredictionPageProps) {
   const { user } = useAuth();
   const [activeModel, setActiveModel] = useState<Model | null>(null);
@@ -44,7 +46,7 @@ export default function PredictionPage({
   useEffect(() => {
     loadActiveModel();
     checkPaymentStatus();
-  }, []);
+  }, [user]); // Re-run when user changes (login/logout)
 
   const checkPaymentStatus = async () => {
     try {
@@ -177,6 +179,7 @@ export default function PredictionPage({
         onRefreshPaymentStatus={() => {
           checkPaymentStatus(); // Update our local payment status
         }}
+        onRefreshEdaPaymentStatus={onRefreshEdaPaymentStatus}
       />
 
       {/* Active Model Info */}
