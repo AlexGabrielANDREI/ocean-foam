@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     // Generate model hash
     const modelHash = crypto
       .createHash("sha256")
-      .update(modelBuffer)
+      .update(Buffer.from(modelBuffer))
       .digest("hex");
     console.log("🔍 Upload API - Generated model hash:", modelHash);
 

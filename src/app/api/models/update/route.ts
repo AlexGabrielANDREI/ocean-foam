@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       const crypto = await import("crypto");
       const modelHash = crypto
         .createHash("sha256")
-        .update(modelBuffer)
+        .update(Buffer.from(modelBuffer))
         .digest("hex");
 
       updateData.model_path = modelFilePath;

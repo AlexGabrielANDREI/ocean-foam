@@ -65,7 +65,7 @@ export async function ensureMainnet(): Promise<void> {
     const network = await provider.getNetwork();
 
     // chainId 1 = Ethereum Mainnet
-    if (network.chainId !== 1n) {
+    if (network.chainId !== BigInt(1)) {
       throw new Error(
         `Please switch to Ethereum Mainnet. Current network: ${network.name} (chainId: ${network.chainId})`
       );
@@ -94,7 +94,7 @@ export async function getCurrentNetwork(): Promise<{
   return {
     chainId: network.chainId,
     name: network.name,
-    isMainnet: network.chainId === 1n,
+    isMainnet: network.chainId === BigInt(1),
   };
 }
 
