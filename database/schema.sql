@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE users (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     wallet_address VARCHAR(255) NOT NULL UNIQUE,
-    wallet_type VARCHAR(50) NOT NULL CHECK (wallet_type IN ('metamask', 'hedera')),
+    wallet_type VARCHAR(50) NOT NULL CHECK (wallet_type IN ('metamask')), -- 'hedera' removed - no longer using Hedera
     role VARCHAR(50) NOT NULL DEFAULT 'consumer' CHECK (role IN ('consumer', 'admin')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

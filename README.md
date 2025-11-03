@@ -1,10 +1,10 @@
 # 🌊 Ocean Prediction Platform
 
-A Next.js application with Web3 wallet integration, Supabase backend, and AI-powered prediction functionality.
+A Next.js application with Web3 wallet integration (Ethereum Mainnet), Supabase backend, and AI-powered prediction functionality.
 
 ## 🚀 Features
 
-- **Web3 Wallet Integration**: MetaMask and Hedera wallet support
+- **Web3 Wallet Integration**: MetaMask wallet support (Hedera support disabled)
 - **Role-Based Access**: User and Admin roles with different permissions
 - **AI Predictions**: ML model predictions with manual and API feature inputs
 - **Supabase Integration**: Real-time database and file storage
@@ -16,7 +16,7 @@ A Next.js application with Web3 wallet integration, Supabase backend, and AI-pow
 - **Frontend**: Next.js 14, React, TypeScript
 - **Styling**: Tailwind CSS with custom CSS variables
 - **Backend**: Supabase (PostgreSQL, Storage, Auth)
-- **Web3**: MetaMask and Hedera wallet integration
+- **Web3**: MetaMask wallet integration (Hedera support disabled)
 - **ML**: Python scripts for model processing
 - **Icons**: Lucide React
 - **Notifications**: React Hot Toast
@@ -26,7 +26,8 @@ A Next.js application with Web3 wallet integration, Supabase backend, and AI-pow
 - Node.js 18+
 - Python 3.8+ (for ML scripts)
 - Supabase account
-- MetaMask browser extension (for testing)
+- MetaMask browser extension
+- Ethereum Mainnet ETH for transactions
 
 ## 🚀 Quick Start
 
@@ -48,9 +49,13 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# Optional: Hedera Configuration
-NEXT_PUBLIC_HEDERA_NETWORK=testnet
-NEXT_PUBLIC_HEDERA_MIRROR_NODE=https://testnet.mirrornode.hedera.com
+# Ethereum Mainnet Configuration
+NEXT_PUBLIC_CONTRACT_ADDRESS=your_mainnet_contract_address
+NEXT_PUBLIC_ALCHEMY_URL=https://eth-mainnet.g.alchemy.com/v2/your_mainnet_api_key
+
+# Optional: Hedera Configuration (DISABLED - No longer using Hedera)
+# NEXT_PUBLIC_HEDERA_NETWORK=testnet
+# NEXT_PUBLIC_HEDERA_MIRROR_NODE=https://testnet.mirrornode.hedera.com
 ```
 
 ### 3. Database Setup
@@ -62,7 +67,7 @@ Run the SQL commands in your Supabase SQL editor:
 CREATE TABLE users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   wallet_address TEXT UNIQUE NOT NULL,
-  wallet_type TEXT NOT NULL CHECK (wallet_type IN ('metamask', 'hedera')),
+  wallet_type TEXT NOT NULL CHECK (wallet_type IN ('metamask')), -- 'hedera' removed - no longer using Hedera
   role TEXT DEFAULT 'consumer' CHECK (role IN ('consumer', 'admin')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -171,11 +176,13 @@ Visit `http://localhost:3000` to see the application.
 
 ### For Users
 
-1. Connect your MetaMask or Hedera wallet
+1. Connect your MetaMask wallet (ensure you're on Ethereum Mainnet)
 2. Navigate to the Prediction page
 3. Choose between manual feature input or API fetch
-4. Make a mock token payment
+4. Make an ETH payment to the smart contract
 5. Receive AI predictions
+
+**Important:** This app uses Ethereum Mainnet. Real ETH will be spent on transactions.
 
 ### For Admins
 
@@ -221,8 +228,9 @@ The application uses a custom design system with CSS variables defined in `globa
 
 ### Wallet Configuration
 
-- **MetaMask**: Automatically detected if installed
-- **Hedera**: Configured via environment variables
+- **MetaMask**: Automatically detected if installed (Ethereum Mainnet required)
+- **Network Validation**: Ensures users are connected to Ethereum Mainnet
+- **Hedera**: Support disabled (no longer using Hedera)
 
 ## 🚀 Deployment
 

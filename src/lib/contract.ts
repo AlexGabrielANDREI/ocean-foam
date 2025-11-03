@@ -3,10 +3,10 @@ import contractAbi from "./contract-abi.json";
 
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
+  "YOUR_MAINNET_CONTRACT_ADDRESS_HERE"; // TODO: Replace with your mainnet contract address
 const ALCHEMY_URL =
-  process.env.ALCHEMY_URL ||
-  "https://eth-sepolia.g.alchemy.com/v2/Rw4dHAu8A_9De5-3lRDgr";
+  process.env.NEXT_PUBLIC_ALCHEMY_URL ||
+  "https://eth-mainnet.g.alchemy.com/v2/YOUR_MAINNET_ALCHEMY_API_KEY_HERE"; // Ethereum Mainnet
 
 export async function getPaymentPrice(): Promise<string> {
   const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);

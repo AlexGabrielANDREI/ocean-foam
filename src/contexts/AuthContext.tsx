@@ -4,8 +4,9 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   WalletConnection,
   connectMetaMask,
-  connectHedera,
+  // connectHedera, // DISABLED - No longer using Hedera
   disconnectWallet,
+  ensureMainnet,
 } from "@/lib/wallet";
 import { supabase, getSupabaseClient } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -14,7 +15,7 @@ interface AuthContextType {
   wallet: WalletConnection;
   user: any;
   loading: boolean;
-  connectWallet: (type: "metamask" | "hedera") => Promise<void>;
+  connectWallet: (type: "metamask") => Promise<void>; // | "hedera"; // Hedera support disabled
   disconnect: () => void;
   isAdmin: boolean;
 }
@@ -200,15 +201,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timeoutId);
   }, []);
 
-  const connectWallet = async (type: "metamask" | "hedera") => {
+  const connectWallet = async (type: "metamask") => {
+    // | "hedera" // Hedera support disabled
     try {
       setLoading(true);
       let walletConnection: WalletConnection;
 
       if (type === "metamask") {
+        // First ensure we're on Ethereum Mainnet
+        await ensureMainnet();
         walletConnection = await connectMetaMask();
       } else {
-        walletConnection = await connectHedera();
+        // Hedera support disabled
+        throw new Error("Hedera wallet connection is no longer supported");
+        // walletConnection = await connectHedera();
       }
 
       console.log("[DEBUG] Wallet connected:", walletConnection.address);

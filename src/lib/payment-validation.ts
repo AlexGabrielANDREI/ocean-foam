@@ -4,11 +4,11 @@ import { supabase, getSupabaseClient } from "./supabase";
 import { getPaymentPrice } from "./contract";
 
 const ALCHEMY_URL =
-  process.env.ALCHEMY_URL ||
-  "https://eth-sepolia.g.alchemy.com/v2/Rw4dHAu8A_9De5-3lRDgr";
+  process.env.NEXT_PUBLIC_ALCHEMY_URL ||
+  "https://eth-mainnet.g.alchemy.com/v2/YOUR_MAINNET_ALCHEMY_API_KEY_HERE"; // Ethereum Mainnet
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  "0x2926afd03D40160be5739fA5b063c52e54CAFEBE";
+  "YOUR_MAINNET_CONTRACT_ADDRESS_HERE"; // TODO: Replace with your mainnet contract address
 
 // Payment validation time windows from environment variables
 const PAYMENT_VALIDITY_HOURS = parseFloat(
@@ -313,7 +313,7 @@ export async function verifyTransactionOnChain(
       maxBlocks: (PAYMENT_VALIDITY_HOURS * 3600) / 12,
     });
 
-    // Assuming 12 second block time, check if transaction is not too old
+    // Ethereum mainnet: ~12 second block time, check if transaction is not too old
     const maxBlocks = (PAYMENT_VALIDITY_HOURS * 3600) / 12; // Convert hours to blocks
     if (blocksSinceTx > maxBlocks) {
       console.log("[DEBUG] Transaction too old");
@@ -686,7 +686,7 @@ export async function verifyEdaTransactionOnChain(
       maxBlocks: (EDA_PAYMENT_VALIDITY_HOURS * 3600) / 12,
     });
 
-    // Assuming 12 second block time, check if transaction is not too old
+    // Ethereum mainnet: ~12 second block time, check if transaction is not too old
     const maxBlocks = (EDA_PAYMENT_VALIDITY_HOURS * 3600) / 12; // Convert hours to blocks
     if (blocksSinceTx > maxBlocks) {
       console.log("[DEBUG] EDA Transaction too old");

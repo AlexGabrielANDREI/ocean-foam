@@ -184,7 +184,7 @@ export interface Database {
         Row: {
           id: string;
           wallet_address: string;
-          wallet_type: "metamask" | "hedera";
+          wallet_type: "metamask"; // | "hedera"; // Hedera support disabled
           role: "consumer" | "admin";
           created_at: string;
           updated_at: string;
@@ -192,7 +192,7 @@ export interface Database {
         Insert: {
           id?: string;
           wallet_address: string;
-          wallet_type: "metamask" | "hedera";
+          wallet_type: "metamask"; // | "hedera"; // Hedera support disabled
           role?: "consumer" | "admin";
           created_at?: string;
           updated_at?: string;
@@ -200,7 +200,7 @@ export interface Database {
         Update: {
           id?: string;
           wallet_address?: string;
-          wallet_type?: "metamask" | "hedera";
+          wallet_type?: "metamask"; // | "hedera"; // Hedera support disabled
           role?: "consumer" | "admin";
           created_at?: string;
           updated_at?: string;

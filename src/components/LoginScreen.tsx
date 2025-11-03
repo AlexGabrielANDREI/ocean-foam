@@ -76,13 +76,14 @@ export default function LoginScreen() {
                   <span>Connect with MetaMask</span>
                 </button>
 
-                <button
+                {/* Hedera wallet button disabled - No longer using Hedera */}
+                {/* <button
                   onClick={() => connectWallet("hedera")}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-3 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-3 shadow-lg hover:scale-105"
                 >
                   <div className="w-5 h-5 bg-purple-300 rounded-full"></div>
                   <span>Connect with Hedera</span>
-                </button>
+                </button> */}
               </div>
 
               <div className="text-sm text-gray-300">
