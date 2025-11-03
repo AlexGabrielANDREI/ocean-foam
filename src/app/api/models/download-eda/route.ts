@@ -6,6 +6,8 @@ import {
   recordEdaAccessTransaction,
 } from "@/lib/payment-validation";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.headers.get("x-wallet-address");

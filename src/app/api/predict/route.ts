@@ -15,6 +15,8 @@ import path from "path";
 
 const execAsync = promisify(exec);
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   console.log("[DEBUG] Entered POST /api/predict handler");
   try {

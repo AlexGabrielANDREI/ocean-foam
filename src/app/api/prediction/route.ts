@@ -6,6 +6,8 @@ import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import os from "os";
 
+export const dynamic = "force-dynamic";
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!

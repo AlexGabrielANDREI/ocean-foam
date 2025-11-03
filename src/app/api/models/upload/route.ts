@@ -5,6 +5,8 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import slugify from "slugify";
 
+export const dynamic = "force-dynamic";
+
 // Create Supabase client with extended timeout and retry configuration
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
