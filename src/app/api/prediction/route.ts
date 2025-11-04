@@ -86,15 +86,10 @@ export async function POST(request: NextRequest) {
     let modelTempPath: string | undefined = undefined;
 
     try {
-      // Model caching logic (store in ./temp instead of OS temp)
-      const tempDir = path.join(process.cwd(), "temp");
-      // Ensure temp directory exists
-      try {
-        const fs = await import("fs/promises");
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (mkdirErr) {
-        console.error("[Model Cache] Error ensuring temp directory:", mkdirErr);
-      }
+      // Use system temp directory (writable on Vercel serverless functions)
+      // os.tmpdir() returns /tmp on Linux (Vercel) and appropriate temp dir on Windows/macOS
+      const tempDir = os.tmpdir();
+      console.log("[Model Cache] Using temp directory:", tempDir);
       const cachedModelPath = path.join(
         tempDir,
         `model_${model.model_hash}.pkl`

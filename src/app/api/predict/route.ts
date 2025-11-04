@@ -12,6 +12,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFileSync, unlinkSync } from "fs";
 import path from "path";
+import os from "os";
 
 const execAsync = promisify(exec);
 
@@ -79,12 +80,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use model_hash as cache key
-    const cachedModelPath = path.join(
-      process.cwd(),
-      "temp",
-      `model_${model.model_hash}.pkl`
-    );
+    // Use model_hash as cache key in system temp directory
+    const tempDir = os.tmpdir();
+    const cachedModelPath = path.join(tempDir, `model_${model.model_hash}.pkl`);
+    console.log("[Model Cache] Using temp directory:", tempDir);
     console.log("[Model Cache] Using cache path:", cachedModelPath);
     let useCachedModel = false;
     try {
@@ -107,13 +106,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      // Ensure temp directory exists
-      try {
-        const fs = await import("fs/promises");
-        await fs.mkdir(path.join(process.cwd(), "temp"), { recursive: true });
-      } catch (mkdirErr) {
-        console.error("[Model Cache] Error ensuring temp directory:", mkdirErr);
-      }
+      // System temp directory (/tmp on Vercel) always exists, no need to create
       // Save model to cache file
       const modelBuffer = Buffer.from(await modelBlob.arrayBuffer());
       try {
@@ -144,12 +137,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      // Save features to temporary file
-      const featuresPath = path.join(
-        process.cwd(),
-        "temp",
-        `features_${Date.now()}.json`
-      );
+      // Save features to temporary file in system temp directory
+      const featuresPath = path.join(tempDir, `features_${Date.now()}.json`);
       const featuresBuffer = Buffer.from(await featuresBlob.arrayBuffer());
       writeFileSync(featuresPath, featuresBuffer);
       // Run manual prediction script
