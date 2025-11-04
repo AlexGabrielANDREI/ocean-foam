@@ -195,35 +195,54 @@ class handler(BaseHTTPRequestHandler):
                         if e.code in [400, 404]:
                             print(f"[Python] Signed URL failed ({e.code}), trying direct download endpoint")
                             direct_url = f"{supabase_url}/storage/v1/object/ml-models/{encoded_path}"
+                            print(f"[Python] Direct URL: {direct_url}")
                             req_direct = urllib.request.Request(direct_url)
                             req_direct.add_header('apikey', supabase_key)
                             req_direct.add_header('Authorization', f'Bearer {supabase_key}')
                             try:
+                                print(f"[Python] Attempting direct download...")
                                 with urllib.request.urlopen(req_direct) as response:
                                     if response.status != 200:
                                         raise Exception(f"HTTP {response.status}: {response.reason}")
                                     model_data = response.read()
+                                    print(f"[Python] Downloaded {len(model_data)} bytes")
                             except urllib.error.HTTPError as e2:
                                 error_body = e2.read().decode('utf-8') if e2.fp else str(e2)
+                                print(f"[Python] Direct download failed: HTTP {e2.code}: {e2.reason}")
                                 raise Exception(f"HTTP {e2.code}: {e2.reason}. Details: {error_body}")
+                            except Exception as e2:
+                                print(f"[Python] Direct download error: {str(e2)}")
+                                raise
                         else:
                             error_body = e.read().decode('utf-8') if e.fp else str(e)
+                            print(f"[Python] HTTP error: {e.code}: {e.reason}")
                             raise Exception(f"HTTP {e.code}: {e.reason}. Details: {error_body}")
                     except urllib.error.URLError as e:
+                        print(f"[Python] URL error: {str(e)}")
                         raise Exception(f"URL Error: {str(e)}")
                     
                     # Save to temp file and load
+                    print(f"[Python] Saving model to temp file...")
                     temp_dir = tempfile.gettempdir()
                     temp_model_path = os.path.join(temp_dir, f"model_{hash(supabase_storage_path)}.pkl")
                     with open(temp_model_path, 'wb') as f:
                         f.write(model_data)
+                    print(f"[Python] Model saved, loading with pickle...")
                     
-                    with open(temp_model_path, 'rb') as f:
-                        model = pickle.load(f)
+                    try:
+                        with open(temp_model_path, 'rb') as f:
+                            model = pickle.load(f)
+                        print(f"[Python] Model loaded successfully: {type(model)}")
+                    except Exception as e:
+                        print(f"[Python] Failed to load model with pickle: {str(e)}")
+                        raise Exception(f"Failed to load model: {str(e)}")
                     
                     print(f"[Python] Model downloaded and cached to: {temp_model_path}")
                     
                 except Exception as e:
+                    print(f"[Python] Exception during Supabase download: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     self.send_response(500)
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
