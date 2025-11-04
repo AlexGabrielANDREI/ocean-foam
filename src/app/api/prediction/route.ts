@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyUserPayment } from "@/lib/payment-validation";
-import { spawn } from "child_process";
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, readFile } from "fs/promises";
 import path from "path";
 import os from "os";
 
@@ -151,65 +150,28 @@ export async function POST(request: NextRequest) {
           Buffer.from(await featuresBlob.arrayBuffer())
         );
         tempFiles.push(featuresTempPath);
-        // Run manual features prediction script and log all output
-        const { spawn } = require("child_process");
-        const py = spawn("python", [
-          "scripts/predict_manual.py",
-          modelTempPath,
-          featuresTempPath,
-        ]);
-        let pyStdout = "";
-        let pyStderr = "";
-        py.stdout.on("data", (data: Buffer) => {
-          pyStdout += data.toString();
-        });
-        py.stderr.on("data", (data: Buffer) => {
-          pyStderr += data.toString();
-        });
-        await new Promise<void>((resolve, reject) => {
-          py.on("close", (code: number) => {
-            console.log("PYTHON STDOUT:", pyStdout);
-            if (pyStderr) console.error("PYTHON STDERR:", pyStderr);
-            if (code !== 0) reject(new Error("Python script failed"));
-            else resolve();
-          });
-        });
-        // Robustly parse the first valid JSON object from pyStdout
-        console.log("Raw Python stdout:", pyStdout);
-        console.log("Python stdout length:", pyStdout.length);
 
-        // Try to parse the entire stdout first
-        try {
-          predictionResult = JSON.parse(pyStdout.trim());
-          console.log("Successfully parsed entire stdout");
-        } catch (e) {
-          console.log("Failed to parse entire stdout, trying line by line");
-          // If that fails, try line by line
-          for (const line of pyStdout.split(/\r?\n/)) {
-            const trimmedLine = line.trim();
-            if (trimmedLine) {
-              try {
-                const obj = JSON.parse(trimmedLine);
-                predictionResult = obj;
-                console.log("Successfully parsed line:", trimmedLine);
-                break;
-              } catch (e) {
-                console.log("Failed to parse line:", trimmedLine);
-              }
-            }
-          }
-        }
+        // Call Python serverless function for prediction
+        const modelBuffer = await readFile(modelTempPath);
+        const featuresData = JSON.parse(
+          await readFile(featuresTempPath, "utf-8")
+        );
 
-        if (!predictionResult) {
-          console.error("Failed to parse any JSON from Python output");
-          console.error("Python stdout:", pyStdout);
-          throw new Error("No valid JSON result from Python script");
-        }
+        predictionResult = await callPythonPrediction(
+          modelBuffer,
+          featuresData
+        );
 
         console.log("Final prediction result:", predictionResult);
       } else {
-        // API features flow (no params)
-        predictionResult = await runAPIFeaturesPrediction(modelTempPath, "");
+        // API features flow (mock data for now)
+        const modelBuffer = await readFile(modelTempPath);
+        // TODO: Replace with actual API data fetching
+        const mockFeatures = {}; // Placeholder
+        predictionResult = await callPythonPrediction(
+          modelBuffer,
+          mockFeatures
+        );
       }
 
       console.log("Before validation - predictionResult:", predictionResult);
@@ -337,98 +299,49 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function runManualFeaturesPrediction(
-  modelPath: string,
-  featuresPath: string
+/**
+ * Call Python serverless function to run prediction
+ * Uses Vercel's Python runtime via internal API call
+ */
+async function callPythonPrediction(
+  modelBuffer: Buffer,
+  features: any
 ): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(
-      process.cwd(),
-      "scripts",
-      "prediction",
-      "manual_features.py"
-    );
+  try {
+    // Get the base URL - use internal call if on Vercel, otherwise localhost
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    const pythonProcess = spawn("python", [
-      scriptPath,
-      modelPath,
-      featuresPath,
-    ]);
+    console.log("[Python Prediction] Calling Python function at:", baseUrl);
 
-    let stdout = "";
-    let stderr = "";
+    // Encode model as base64 for transmission
+    const modelBase64 = modelBuffer.toString("base64");
 
-    pythonProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
+    const response = await fetch(`${baseUrl}/api/run-prediction`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelBase64,
+        features: features,
+      }),
     });
 
-    pythonProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Python prediction failed: ${response.status} ${errorText}`
+      );
+    }
 
-    pythonProcess.on("close", (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error("Failed to parse prediction result"));
-        }
-      } else {
-        reject(new Error(`Python script failed: ${stderr}`));
-      }
-    });
+    const result = await response.json();
+    console.log("[Python Prediction] Success:", result);
 
-    pythonProcess.on("error", (error) => {
-      reject(new Error(`Failed to run Python script: ${error.message}`));
-    });
-  });
-}
-
-async function runAPIFeaturesPrediction(
-  modelPath: string,
-  apiParamsPath: string
-): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(
-      process.cwd(),
-      "scripts",
-      "prediction",
-      "api_features.py"
-    );
-
-    const pythonProcess = spawn("python", [
-      scriptPath,
-      modelPath,
-      apiParamsPath,
-    ]);
-
-    let stdout = "";
-    let stderr = "";
-
-    pythonProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    pythonProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    pythonProcess.on("close", (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error("Failed to parse prediction result"));
-        }
-      } else {
-        reject(new Error(`Python script failed: ${stderr}`));
-      }
-    });
-
-    pythonProcess.on("error", (error) => {
-      reject(new Error(`Failed to run Python script: ${error.message}`));
-    });
-  });
+    return result;
+  } catch (error) {
+    console.error("[Python Prediction] Error:", error);
+    throw error;
+  }
 }

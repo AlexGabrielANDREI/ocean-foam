@@ -8,13 +8,9 @@ import {
   verifyUserPayment,
   recordPaymentTransaction,
 } from "@/lib/payment-validation";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, readFileSync } from "fs";
 import path from "path";
 import os from "os";
-
-const execAsync = promisify(exec);
 
 export const dynamic = "force-dynamic";
 
@@ -137,27 +133,22 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      // Save features to temporary file in system temp directory
-      const featuresPath = path.join(tempDir, `features_${Date.now()}.json`);
+      // Parse features data
       const featuresBuffer = Buffer.from(await featuresBlob.arrayBuffer());
-      writeFileSync(featuresPath, featuresBuffer);
-      // Run manual prediction script
-      const { stdout } = await execAsync(
-        `python scripts/predict_manual.py "${tempModelPath}" "${featuresPath}"`
-      );
-      predictionResult = JSON.parse(stdout);
-      // Clean up temporary files
-      unlinkSync(featuresPath);
+      const featuresData = JSON.parse(featuresBuffer.toString("utf-8"));
+
+      // Call Python serverless function
+      const modelBuffer = readFileSync(tempModelPath);
+      predictionResult = await callPythonPrediction(modelBuffer, featuresData);
     } else {
-      // Run API prediction script
-      const { stdout } = await execAsync(
-        `python scripts/predict_api.py "${tempModelPath}"`
-      );
-      predictionResult = JSON.parse(stdout);
+      // API features flow (mock data for now)
+      const modelBuffer = readFileSync(tempModelPath);
+      // TODO: Replace with actual API data fetching
+      const mockFeatures = {}; // Placeholder
+      predictionResult = await callPythonPrediction(modelBuffer, mockFeatures);
     }
 
-    // Clean up model file: REMOVE THIS LINE (do not delete cached model)
-    // unlinkSync(tempModelPath);
+    // Model file is cached in /tmp for reuse, no cleanup needed
 
     // Save prediction to database with validated transaction hash
     const supabaseWithWallet = getWalletAwareSupabase(user.wallet_address);
@@ -198,5 +189,52 @@ export async function POST(request: NextRequest) {
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Call Python serverless function to run prediction
+ * Uses Vercel's Python runtime via internal API call
+ */
+async function callPythonPrediction(
+  modelBuffer: Buffer,
+  features: any
+): Promise<any> {
+  try {
+    // Get the base URL - use internal call if on Vercel, otherwise localhost
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    console.log("[Python Prediction] Calling Python function at:", baseUrl);
+
+    // Encode model as base64 for transmission
+    const modelBase64 = modelBuffer.toString("base64");
+
+    const response = await fetch(`${baseUrl}/api/run-prediction`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelBase64,
+        features: features,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Python prediction failed: ${response.status} ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log("[Python Prediction] Success:", result);
+
+    return result;
+  } catch (error) {
+    console.error("[Python Prediction] Error:", error);
+    throw error;
   }
 }
