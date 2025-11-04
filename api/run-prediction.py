@@ -1,12 +1,12 @@
 """
 Vercel Python Serverless Function for ML Predictions
 Handles both manual and API-based predictions
+Optimized: Removed pandas dependency to reduce size (~100MB savings)
 """
 
 from http.server import BaseHTTPRequestHandler
 import json
 import pickle
-import pandas as pd
 import numpy as np
 import base64
 import warnings
@@ -34,51 +34,68 @@ def get_original_features():
 
 
 def prepare_input_data(features_data, feature_columns):
-    """Prepare input data from features dictionary"""
+    """Prepare input data from features dictionary - using numpy arrays instead of pandas"""
     try:
         # If the data is a list, use the first item
         if isinstance(features_data, list):
             features_data = features_data[0]
         
-        # Create DataFrame with one row
-        df = pd.DataFrame([features_data])
+        # Build feature array in correct order
+        feature_values = []
+        for col in feature_columns:
+            value = features_data.get(col, 0)
+            
+            # Handle special cases
+            if isinstance(value, (list, np.ndarray)):
+                # For Topic_Probabilities, convert to a single value (use first element or sum)
+                if col == 'Topic_Probabilities':
+                    value = float(np.array(value).sum()) if len(value) > 0 else 0.0
+                else:
+                    value = float(value[0]) if len(value) > 0 else 0.0
+            elif isinstance(value, bool):
+                value = 1.0 if value else 0.0
+            elif value is None:
+                value = 0.0
+            else:
+                # Convert to float, handling strings
+                try:
+                    value = float(value)
+                except (ValueError, TypeError):
+                    # For string columns like 'Topic', use hash or simple encoding
+                    if col == 'Topic':
+                        value = float(hash(str(value)) % 1000) / 1000.0
+                    else:
+                        value = 0.0
+            
+            feature_values.append(value)
         
-        # Ensure all required columns are present
-        missing = [col for col in feature_columns if col not in df.columns]
-        if missing:
-            print(f"Warning: Missing features in input: {missing}. Filling with 0.")
-            for col in missing:
-                df[col] = 0
+        # Convert to numpy array and reshape for sklearn (1 sample, n features)
+        feature_array = np.array(feature_values, dtype=np.float64)
+        feature_array = feature_array.reshape(1, -1)
         
-        # Ensure correct column order
-        df = df[feature_columns]
+        # Replace any NaN or inf values with 0
+        feature_array = np.nan_to_num(feature_array, nan=0.0, posinf=0.0, neginf=0.0)
         
-        # Convert boolean columns if needed
-        for col in df.columns:
-            if df[col].dtype == object and df[col].isin([True, False]).all():
-                df[col] = df[col].astype(bool)
-        
-        # Fill any remaining NaNs
-        df = df.fillna(0)
-        
-        return df
+        return feature_array
     except Exception as e:
         raise Exception(f"Error preparing input data: {e}")
 
 
-def make_prediction(model, input_df):
-    """Make prediction using the model"""
+def make_prediction(model, input_array):
+    """Make prediction using the model - accepts numpy array"""
     try:
-        prediction = model.predict(input_df)[0]
-        probabilities = model.predict_proba(input_df)[0]
+        prediction = model.predict(input_array)[0]
+        probabilities = model.predict_proba(input_array)[0]
         
         # Convert numpy types to Python native types for JSON serialization
-        prediction = str(prediction) if hasattr(prediction, 'item') else prediction
+        if hasattr(prediction, 'item'):
+            prediction = prediction.item()
+        prediction = str(prediction)
         
         return {
             'prediction': prediction,
             'probabilities': {str(k): float(v) for k, v in zip(model.classes_, probabilities.tolist())},
-            'confidence': float(max(probabilities))
+            'confidence': float(np.max(probabilities))
         }
     except Exception as e:
         raise Exception(f"Error making prediction: {e}")
@@ -115,11 +132,11 @@ class handler(BaseHTTPRequestHandler):
             # Get feature columns
             feature_columns = get_original_features()
             
-            # Prepare input data
-            input_df = prepare_input_data(features, feature_columns)
+            # Prepare input data as numpy array
+            input_array = prepare_input_data(features, feature_columns)
             
             # Make prediction
-            result = make_prediction(model, input_df)
+            result = make_prediction(model, input_array)
             
             # Send response
             self.send_response(200)
@@ -142,6 +159,5 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({
             'status': 'ok',
-            'message': 'Python prediction service is running'
+            'message': 'Python prediction service is running (optimized - no pandas)'
         }).encode())
-

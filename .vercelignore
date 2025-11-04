@@ -1,0 +1,11 @@
+# Exclude unnecessary files from Vercel deployment
+temp/
+*.pkl
+models/
+scripts/
+.env.local
+node_modules/.cache/
+.next/cache/
+*.log
+*.tsbuildinfo
+
