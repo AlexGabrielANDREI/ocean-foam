@@ -152,24 +152,23 @@ export async function POST(request: NextRequest) {
         tempFiles.push(featuresTempPath);
 
         // Call Python serverless function for prediction
-        const modelBuffer = await readFile(modelTempPath);
+        // Pass model path instead of buffer to avoid payload size limits
         const featuresData = JSON.parse(
           await readFile(featuresTempPath, "utf-8")
         );
 
         predictionResult = await callPythonPrediction(
-          modelBuffer,
+          modelTempPath, // Pass path instead of buffer
           featuresData
         );
 
         console.log("Final prediction result:", predictionResult);
       } else {
         // API features flow (mock data for now)
-        const modelBuffer = await readFile(modelTempPath);
         // TODO: Replace with actual API data fetching
         const mockFeatures = {}; // Placeholder
         predictionResult = await callPythonPrediction(
-          modelBuffer,
+          modelTempPath, // Pass path instead of buffer
           mockFeatures
         );
       }
@@ -302,9 +301,10 @@ export async function POST(request: NextRequest) {
 /**
  * Call Python serverless function to run prediction
  * Uses Vercel's Python runtime via internal API call
+ * Passes model file path instead of model data to avoid payload size limits
  */
 async function callPythonPrediction(
-  modelBuffer: Buffer,
+  modelPath: string,
   features: any
 ): Promise<any> {
   try {
@@ -314,9 +314,7 @@ async function callPythonPrediction(
       : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     console.log("[Python Prediction] Calling Python function at:", baseUrl);
-
-    // Encode model as base64 for transmission
-    const modelBase64 = modelBuffer.toString("base64");
+    console.log("[Python Prediction] Model path:", modelPath);
 
     const response = await fetch(`${baseUrl}/api/run-prediction`, {
       method: "POST",
@@ -324,7 +322,7 @@ async function callPythonPrediction(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: modelBase64,
+        model_path: modelPath, // Pass path instead of base64 data
         features: features,
       }),
     });

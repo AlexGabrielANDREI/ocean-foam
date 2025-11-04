@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler
 import json
 import pickle
 import numpy as np
-import base64
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -113,21 +112,38 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(body.decode('utf-8'))
             
             # Extract parameters
-            model_base64 = data.get('model')
+            model_path = data.get('model_path')
             features = data.get('features')
             
-            if not model_base64 or not features:
+            if not model_path or not features:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    'error': 'Missing required parameters: model and features'
+                    'error': 'Missing required parameters: model_path and features'
                 }).encode())
                 return
             
-            # Decode and load model from base64
-            model_bytes = base64.b64decode(model_base64)
-            model = pickle.loads(model_bytes)
+            # Load model from file path (shared /tmp directory)
+            try:
+                with open(model_path, 'rb') as f:
+                    model = pickle.load(f)
+            except FileNotFoundError:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': f'Model file not found at path: {model_path}'
+                }).encode())
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': f'Failed to load model: {str(e)}'
+                }).encode())
+                return
             
             # Get feature columns
             feature_columns = get_original_features()

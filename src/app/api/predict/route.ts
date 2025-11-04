@@ -8,7 +8,7 @@ import {
   verifyUserPayment,
   recordPaymentTransaction,
 } from "@/lib/payment-validation";
-import { writeFileSync, readFileSync } from "fs";
+import { writeFileSync } from "fs";
 import path from "path";
 import os from "os";
 
@@ -137,15 +137,19 @@ export async function POST(request: NextRequest) {
       const featuresBuffer = Buffer.from(await featuresBlob.arrayBuffer());
       const featuresData = JSON.parse(featuresBuffer.toString("utf-8"));
 
-      // Call Python serverless function
-      const modelBuffer = readFileSync(tempModelPath);
-      predictionResult = await callPythonPrediction(modelBuffer, featuresData);
+      // Call Python serverless function - pass path instead of buffer
+      predictionResult = await callPythonPrediction(
+        tempModelPath,
+        featuresData
+      );
     } else {
       // API features flow (mock data for now)
-      const modelBuffer = readFileSync(tempModelPath);
       // TODO: Replace with actual API data fetching
       const mockFeatures = {}; // Placeholder
-      predictionResult = await callPythonPrediction(modelBuffer, mockFeatures);
+      predictionResult = await callPythonPrediction(
+        tempModelPath,
+        mockFeatures
+      );
     }
 
     // Model file is cached in /tmp for reuse, no cleanup needed
@@ -195,9 +199,10 @@ export async function POST(request: NextRequest) {
 /**
  * Call Python serverless function to run prediction
  * Uses Vercel's Python runtime via internal API call
+ * Passes model file path instead of model data to avoid payload size limits
  */
 async function callPythonPrediction(
-  modelBuffer: Buffer,
+  modelPath: string,
   features: any
 ): Promise<any> {
   try {
@@ -207,9 +212,7 @@ async function callPythonPrediction(
       : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     console.log("[Python Prediction] Calling Python function at:", baseUrl);
-
-    // Encode model as base64 for transmission
-    const modelBase64 = modelBuffer.toString("base64");
+    console.log("[Python Prediction] Model path:", modelPath);
 
     const response = await fetch(`${baseUrl}/api/run-prediction`, {
       method: "POST",
@@ -217,7 +220,7 @@ async function callPythonPrediction(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: modelBase64,
+        model_path: modelPath, // Pass path instead of base64 data
         features: features,
       }),
     });
