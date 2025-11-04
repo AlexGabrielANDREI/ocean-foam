@@ -151,19 +151,21 @@ class handler(BaseHTTPRequestHandler):
                         raise Exception("Supabase credentials not found in environment")
                     
                     # Construct Supabase storage URL
-                    # For public buckets, use: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+                    # For private buckets, use: https://{project}.supabase.co/storage/v1/object/sign/{bucket}/{path}
                     # URL encode each path segment separately
                     path_parts = supabase_storage_path.split('/')
                     encoded_parts = [urllib.parse.quote(part, safe='') for part in path_parts]
                     encoded_path = '/'.join(encoded_parts)
-                    storage_url = f"{supabase_url}/storage/v1/object/public/ml-models/{encoded_path}"
+                    
+                    # Try signed URL endpoint first (for private buckets)
+                    storage_url = f"{supabase_url}/storage/v1/object/sign/ml-models/{encoded_path}"
                     
                     print(f"[Python] Downloading model from Supabase")
                     print(f"[Python] Original path: {supabase_storage_path}")
                     print(f"[Python] Encoded path: {encoded_path}")
-                    print(f"[Python] Full URL: {storage_url}")
+                    print(f"[Python] Using signed URL endpoint")
                     
-                    # Download model file - try with auth first, then without if public bucket
+                    # Download model file using signed URL
                     req = urllib.request.Request(storage_url)
                     req.add_header('apikey', supabase_key)
                     req.add_header('Authorization', f'Bearer {supabase_key}')
@@ -172,15 +174,34 @@ class handler(BaseHTTPRequestHandler):
                         with urllib.request.urlopen(req) as response:
                             if response.status != 200:
                                 raise Exception(f"HTTP {response.status}: {response.reason}")
-                            model_data = response.read()
+                            # Signed URL returns a JSON with a signed URL, need to follow redirect or use direct download
+                            signed_data = json.loads(response.read().decode('utf-8'))
+                            if 'signedURL' in signed_data:
+                                # Follow the signed URL
+                                signed_url = signed_data['signedURL']
+                                print(f"[Python] Following signed URL")
+                                with urllib.request.urlopen(signed_url) as signed_response:
+                                    model_data = signed_response.read()
+                            else:
+                                # Fallback: try direct download endpoint
+                                direct_url = f"{supabase_url}/storage/v1/object/ml-models/{encoded_path}"
+                                req_direct = urllib.request.Request(direct_url)
+                                req_direct.add_header('apikey', supabase_key)
+                                req_direct.add_header('Authorization', f'Bearer {supabase_key}')
+                                with urllib.request.urlopen(req_direct) as direct_response:
+                                    model_data = direct_response.read()
                     except urllib.error.HTTPError as e:
-                        # If 400/401, try without auth (public bucket)
-                        if e.code in [400, 401]:
-                            print(f"[Python] Auth failed ({e.code}), trying without auth (public bucket)")
-                            req_no_auth = urllib.request.Request(storage_url)
-                            req_no_auth.add_header('apikey', supabase_key)
+                        # If signed URL fails, try direct download endpoint
+                        if e.code in [400, 404]:
+                            print(f"[Python] Signed URL failed ({e.code}), trying direct download endpoint")
+                            direct_url = f"{supabase_url}/storage/v1/object/ml-models/{encoded_path}"
+                            req_direct = urllib.request.Request(direct_url)
+                            req_direct.add_header('apikey', supabase_key)
+                            req_direct.add_header('Authorization', f'Bearer {supabase_key}')
                             try:
-                                with urllib.request.urlopen(req_no_auth) as response:
+                                with urllib.request.urlopen(req_direct) as response:
+                                    if response.status != 200:
+                                        raise Exception(f"HTTP {response.status}: {response.reason}")
                                     model_data = response.read()
                             except urllib.error.HTTPError as e2:
                                 error_body = e2.read().decode('utf-8') if e2.fp else str(e2)
