@@ -18,9 +18,11 @@ warnings.filterwarnings('ignore')
 
 # Check scikit-learn version
 print(f"[Python] scikit-learn version: {sklearn.__version__}")
-if sklearn.__version__.startswith('1.4') or sklearn.__version__.startswith('1.5') or sklearn.__version__.startswith('1.6') or sklearn.__version__.startswith('1.7'):
-    print("[Python] WARNING: scikit-learn 1.4+ detected, but model was trained with 1.3.x")
-    print("[Python] Model requires scikit-learn 1.3.x (without missing_go_to_left field)")
+if sklearn.__version__ != "1.2.2":
+    print(f"[Python] WARNING: scikit-learn version mismatch!")
+    print(f"[Python] Model was trained with scikit-learn 1.2.2")
+    print(f"[Python] Runtime has scikit-learn {sklearn.__version__}")
+    print(f"[Python] This may cause compatibility issues")
 
 
 def get_original_features():
@@ -244,12 +246,9 @@ class handler(BaseHTTPRequestHandler):
                         if "missing_go_to_left" in str(e) or "incompatible dtype" in str(e):
                             print(f"[Python] Model version mismatch detected!")
                             print(f"[Python] Runtime scikit-learn: {sklearn.__version__}")
-                            print(f"[Python] Model requires scikit-learn 1.3.x (without missing_go_to_left)")
-                            print(f"[Python] ERROR: Version mismatch cannot be resolved automatically")
-                            print(f"[Python] Solutions:")
-                            print(f"[Python]   1. Constrain scikit-learn to >=1.3.0,<1.4.0")
-                            print(f"[Python]   2. Or retrain model with scikit-learn {sklearn.__version__}")
-                            raise Exception(f"Model/scikit-learn version mismatch. Runtime: {sklearn.__version__}, Model requires: 1.3.x. {str(e)}")
+                            print(f"[Python] Model was trained with scikit-learn 1.2.2")
+                            print(f"[Python] Error details: {str(e)}")
+                            raise Exception(f"Model/scikit-learn version mismatch. Model trained with 1.2.2, runtime has {sklearn.__version__}. {str(e)}")
                         else:
                             print(f"[Python] Failed to load model with pickle: {str(e)}")
                             raise Exception(f"Failed to load model: {str(e)}")
