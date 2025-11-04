@@ -11,6 +11,7 @@ import numpy as np
 import warnings
 import os
 import urllib.request
+import urllib.parse
 import tempfile
 warnings.filterwarnings('ignore')
 
@@ -150,18 +151,45 @@ class handler(BaseHTTPRequestHandler):
                         raise Exception("Supabase credentials not found in environment")
                     
                     # Construct Supabase storage URL
-                    # Format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
-                    storage_url = f"{supabase_url}/storage/v1/object/public/ml-models/{supabase_storage_path}"
+                    # For public buckets, use: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+                    # URL encode each path segment separately
+                    path_parts = supabase_storage_path.split('/')
+                    encoded_parts = [urllib.parse.quote(part, safe='') for part in path_parts]
+                    encoded_path = '/'.join(encoded_parts)
+                    storage_url = f"{supabase_url}/storage/v1/object/public/ml-models/{encoded_path}"
                     
-                    print(f"[Python] Downloading model from Supabase: {storage_url}")
+                    print(f"[Python] Downloading model from Supabase")
+                    print(f"[Python] Original path: {supabase_storage_path}")
+                    print(f"[Python] Encoded path: {encoded_path}")
+                    print(f"[Python] Full URL: {storage_url}")
                     
-                    # Download model file
+                    # Download model file - try with auth first, then without if public bucket
                     req = urllib.request.Request(storage_url)
                     req.add_header('apikey', supabase_key)
                     req.add_header('Authorization', f'Bearer {supabase_key}')
                     
-                    with urllib.request.urlopen(req) as response:
-                        model_data = response.read()
+                    try:
+                        with urllib.request.urlopen(req) as response:
+                            if response.status != 200:
+                                raise Exception(f"HTTP {response.status}: {response.reason}")
+                            model_data = response.read()
+                    except urllib.error.HTTPError as e:
+                        # If 400/401, try without auth (public bucket)
+                        if e.code in [400, 401]:
+                            print(f"[Python] Auth failed ({e.code}), trying without auth (public bucket)")
+                            req_no_auth = urllib.request.Request(storage_url)
+                            req_no_auth.add_header('apikey', supabase_key)
+                            try:
+                                with urllib.request.urlopen(req_no_auth) as response:
+                                    model_data = response.read()
+                            except urllib.error.HTTPError as e2:
+                                error_body = e2.read().decode('utf-8') if e2.fp else str(e2)
+                                raise Exception(f"HTTP {e2.code}: {e2.reason}. Details: {error_body}")
+                        else:
+                            error_body = e.read().decode('utf-8') if e.fp else str(e)
+                            raise Exception(f"HTTP {e.code}: {e.reason}. Details: {error_body}")
+                    except urllib.error.URLError as e:
+                        raise Exception(f"URL Error: {str(e)}")
                     
                     # Save to temp file and load
                     temp_dir = tempfile.gettempdir()

@@ -193,11 +193,12 @@ def predict(model, input_df):
 
 def main():
     """Main function to run prediction"""
-    if len(sys.argv) < 2:
-        print("Usage: python predict_api.py <model_path>")
+    if len(sys.argv) < 3:
+        print("Usage: python predict_api.py <model_path> <features_json>")
         sys.exit(1)
     
     model_path = sys.argv[1]
+    features_json = sys.argv[2]
     
     # Load model
     model = load_original_model(model_path)
@@ -207,9 +208,11 @@ def main():
     # Get feature columns
     feature_columns = get_original_features()
     
-    # Fetch features from API
-    features = fetch_features_from_api()
-    if features is None:
+    # Parse features from JSON input
+    try:
+        features = json.loads(features_json)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing features JSON: {e}")
         sys.exit(1)
     
     # Prepare input data

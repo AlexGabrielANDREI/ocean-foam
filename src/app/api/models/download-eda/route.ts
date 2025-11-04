@@ -38,35 +38,44 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if payment gate is enabled
+    const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
+    console.log("[DEBUG] EDA Download - Payment gate enabled:", paymentGateEnabled);
+
     // Validate EDA payment
-    console.log(
-      "[DEBUG] EDA Download - Validating EDA payment for wallet:",
-      walletAddress
-    );
-    const paymentValidation = await verifyEdaPayment(
-      walletAddress,
-      transactionHash && transactionHash.trim() !== ""
-        ? transactionHash
-        : undefined
-    );
-
-    console.log(
-      "[DEBUG] EDA Download - Payment validation result:",
-      paymentValidation
-    );
-
-    if (!paymentValidation.isValid) {
+    let paymentValidation: any = null;
+    if (paymentGateEnabled) {
       console.log(
-        "[DEBUG] EDA Download - Payment validation failed:",
-        paymentValidation.reason
+        "[DEBUG] EDA Download - Validating EDA payment for wallet:",
+        walletAddress
       );
-      return NextResponse.json(
-        { error: `EDA Payment required: ${paymentValidation.reason}` },
-        { status: 402 }
+      paymentValidation = await verifyEdaPayment(
+        walletAddress,
+        transactionHash && transactionHash.trim() !== ""
+          ? transactionHash
+          : undefined
       );
-    }
 
-    console.log("[DEBUG] EDA Download - EDA Payment validation successful");
+      console.log(
+        "[DEBUG] EDA Download - Payment validation result:",
+        paymentValidation
+      );
+
+      if (!paymentValidation.isValid) {
+        console.log(
+          "[DEBUG] EDA Download - Payment validation failed:",
+          paymentValidation.reason
+        );
+        return NextResponse.json(
+          { error: `EDA Payment required: ${paymentValidation.reason}` },
+          { status: 402 }
+        );
+      }
+
+      console.log("[DEBUG] EDA Download - EDA Payment validation successful");
+    } else {
+      console.log("[DEBUG] EDA Download - Payment validation SKIPPED (PAYMENT_GATE=false)");
+    }
 
     // Get user details for recording access (use wallet-specific client like predictions)
     const supabaseWithWallet = getSupabaseClient(walletAddress);
@@ -86,7 +95,7 @@ export async function GET(request: NextRequest) {
     // Record EDA access transaction for every successful download
     // This ensures the 5-minute window is tracked properly
     const transactionHashToRecord =
-      paymentValidation.transactionHash || "eda_access_" + Date.now();
+      paymentValidation?.transactionHash || transactionHash || "eda_access_" + Date.now();
 
     console.log(
       "[DEBUG] EDA Download - Recording EDA access transaction:",

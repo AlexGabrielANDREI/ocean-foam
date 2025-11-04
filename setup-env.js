@@ -15,6 +15,10 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=YOUR_MAINNET_CONTRACT_ADDRESS_HERE
 # Application Configuration
 NEXT_PUBLIC_APP_NAME=Prediction Dashboard
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Payment Gate (set to false to disable payment validation for testing)
+# WARNING: Always set to true in production!
+PAYMENT_GATE=true
 `;
 
 const envPath = path.join(__dirname, ".env.local");

@@ -11,6 +11,7 @@ import {
 import { writeFileSync } from "fs";
 import path from "path";
 import os from "os";
+import { spawn } from "child_process";
 
 export const dynamic = "force-dynamic";
 
@@ -24,42 +25,50 @@ export async function POST(request: NextRequest) {
     // Get transaction hash from headers
     const transactionHash = request.headers.get("x-transaction-hash");
 
+    // Check if payment gate is enabled
+    const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
+    console.log("[DEBUG] Payment gate enabled:", paymentGateEnabled);
+
     // Validate payment and store result
     let paymentValidation: any = null;
 
-    if (transactionHash) {
-      console.log(
-        "[DEBUG] Validating payment for transaction:",
-        transactionHash
-      );
-      paymentValidation = await verifyUserPayment(
-        user.wallet_address,
-        transactionHash
-      );
-
-      if (!paymentValidation.isValid) {
-        return NextResponse.json(
-          { error: `Payment validation failed: ${paymentValidation.reason}` },
-          { status: 402 }
+    if (paymentGateEnabled) {
+      if (transactionHash) {
+        console.log(
+          "[DEBUG] Validating payment for transaction:",
+          transactionHash
         );
-      }
+        paymentValidation = await verifyUserPayment(
+          user.wallet_address,
+          transactionHash
+        );
 
-      console.log("[DEBUG] Payment validation successful");
+        if (!paymentValidation.isValid) {
+          return NextResponse.json(
+            { error: `Payment validation failed: ${paymentValidation.reason}` },
+            { status: 402 }
+          );
+        }
+
+        console.log("[DEBUG] Payment validation successful");
+      } else {
+        // If no transaction hash provided, check for existing valid payment
+        console.log(
+          "[DEBUG] No transaction hash provided, checking for existing payment"
+        );
+        paymentValidation = await verifyUserPayment(user.wallet_address);
+
+        if (!paymentValidation.isValid) {
+          return NextResponse.json(
+            { error: `Payment required: ${paymentValidation.reason}` },
+            { status: 402 }
+          );
+        }
+
+        console.log("[DEBUG] Existing payment validation successful");
+      }
     } else {
-      // If no transaction hash provided, check for existing valid payment
-      console.log(
-        "[DEBUG] No transaction hash provided, checking for existing payment"
-      );
-      paymentValidation = await verifyUserPayment(user.wallet_address);
-
-      if (!paymentValidation.isValid) {
-        return NextResponse.json(
-          { error: `Payment required: ${paymentValidation.reason}` },
-          { status: 402 }
-        );
-      }
-
-      console.log("[DEBUG] Existing payment validation successful");
+      console.log("[DEBUG] Payment validation SKIPPED (PAYMENT_GATE=false)");
     }
 
     // Find the single active model
@@ -210,41 +219,141 @@ async function callPythonPrediction(
   features: any
 ): Promise<any> {
   try {
-    // Get the base URL - use internal call if on Vercel, otherwise localhost
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    // Check if we're on Vercel (production) or local development
+    const isVercel = !!process.env.VERCEL;
 
-    console.log("[Python Prediction] Calling Python function at:", baseUrl);
-    console.log("[Python Prediction] Model path:", modelPath);
-    console.log(
-      "[Python Prediction] Supabase storage path:",
-      supabaseStoragePath
-    );
+    if (isVercel) {
+      // On Vercel: Use HTTP call to Python serverless function
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    const response = await fetch(`${baseUrl}/api/run-prediction`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model_path: modelPath, // Local path (may not exist in Python container)
-        supabase_storage_path: supabaseStoragePath, // Fallback: download from Supabase
-        features: features,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Python prediction failed: ${response.status} ${errorText}`
+      console.log("[Python Prediction] Calling Python function at:", baseUrl);
+      console.log("[Python Prediction] Model path:", modelPath);
+      console.log(
+        "[Python Prediction] Supabase storage path:",
+        supabaseStoragePath
       );
+
+      const response = await fetch(`${baseUrl}/api/run-prediction`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model_path: modelPath, // Local path (may not exist in Python container)
+          supabase_storage_path: supabaseStoragePath, // Fallback: download from Supabase
+          features: features,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Python prediction failed: ${response.status} ${errorText}`
+        );
+      }
+
+      const result = await response.json();
+      console.log("[Python Prediction] Success:", result);
+
+      return result;
+    } else {
+      // Local development: Use child_process to run Python script directly
+      console.log(
+        "[Python Prediction] Running Python locally via child_process"
+      );
+      console.log("[Python Prediction] Model path:", modelPath);
+
+      return new Promise((resolve, reject) => {
+        const pythonScript = path.join(
+          process.cwd(),
+          "scripts",
+          "predict_api.py"
+        );
+        const featuresJson = JSON.stringify(features);
+
+        // Try different Python commands (python, python3, py)
+        const pythonCommands = ["python", "python3", "py"];
+
+        const tryNextCommand = (index: number) => {
+          if (index >= pythonCommands.length) {
+            reject(
+              new Error(
+                `Python not found. Tried: ${pythonCommands.join(
+                  ", "
+                )}. Please install Python or add it to PATH.`
+              )
+            );
+            return;
+          }
+
+          const pythonCommand = pythonCommands[index];
+          console.log(
+            `[Python Prediction] Trying Python command: ${pythonCommand}`
+          );
+
+          const pythonProcess = spawn(pythonCommand, [
+            pythonScript,
+            modelPath,
+            featuresJson,
+          ]);
+
+          let stdout = "";
+          let stderr = "";
+
+          pythonProcess.stdout.on("data", (data) => {
+            stdout += data.toString();
+          });
+
+          pythonProcess.stderr.on("data", (data) => {
+            stderr += data.toString();
+          });
+
+          pythonProcess.on("close", (code) => {
+            if (code !== 0) {
+              console.error("[Python Prediction] Python stderr:", stderr);
+              reject(
+                new Error(`Python script exited with code ${code}: ${stderr}`)
+              );
+              return;
+            }
+
+            try {
+              const result = JSON.parse(stdout);
+              console.log("[Python Prediction] Success:", result);
+              resolve(result);
+            } catch (error) {
+              console.error(
+                "[Python Prediction] Failed to parse output:",
+                stdout
+              );
+              reject(new Error(`Failed to parse Python output: ${error}`));
+            }
+          });
+
+          pythonProcess.on("error", (error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") {
+              // Command not found, try next command
+              console.log(
+                `[Python Prediction] ${pythonCommand} not found, trying next...`
+              );
+              tryNextCommand(index + 1);
+            } else {
+              console.error(
+                "[Python Prediction] Failed to start Python:",
+                error
+              );
+              reject(
+                new Error(`Failed to start Python process: ${error.message}`)
+              );
+            }
+          });
+        };
+
+        tryNextCommand(0);
+      });
     }
-
-    const result = await response.json();
-    console.log("[Python Prediction] Success:", result);
-
-    return result;
   } catch (error) {
     console.error("[Python Prediction] Error:", error);
     throw error;

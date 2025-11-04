@@ -14,11 +14,30 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if payment gate is enabled
+    const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
+    console.log("[DEBUG] Payment status check - Payment gate enabled:", paymentGateEnabled);
+
+    if (!paymentGateEnabled) {
+      // Payment gate disabled - return valid payment status
+      console.log("[DEBUG] Payment status check - Returning valid payment (PAYMENT_GATE=false)");
+      return NextResponse.json({
+        success: true,
+        paymentStatus: {
+          hasValidPayment: true,
+          paymentGateEnabled: false,
+        },
+      });
+    }
+
     const paymentStatus = await getUserPaymentStatus(walletAddress);
 
     return NextResponse.json({
       success: true,
-      paymentStatus,
+      paymentStatus: {
+        ...paymentStatus,
+        paymentGateEnabled: true,
+      },
     });
   } catch (error) {
     console.error("Payment status check error:", error);

@@ -19,6 +19,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if payment gate is enabled
+    const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
+    console.log("[DEBUG] EDA Payment Status - Payment gate enabled:", paymentGateEnabled);
+
+    if (!paymentGateEnabled) {
+      // Payment gate disabled - return valid payment status
+      console.log("[DEBUG] EDA Payment Status - Returning valid payment (PAYMENT_GATE=false)");
+      return NextResponse.json({
+        success: true,
+        edaPaymentStatus: {
+          hasValidPayment: true,
+          paymentGateEnabled: false,
+        },
+      });
+    }
+
     console.log(
       "[DEBUG] EDA Payment Status - Getting EDA payment status for wallet:",
       walletAddress
@@ -29,7 +45,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      edaPaymentStatus,
+      edaPaymentStatus: {
+        ...edaPaymentStatus,
+        paymentGateEnabled: true,
+      },
     });
   } catch (error) {
     console.error("EDA Payment status error:", error);
