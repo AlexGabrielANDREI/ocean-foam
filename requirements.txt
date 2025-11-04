@@ -1,6 +1,7 @@
 # Optimized minimal dependencies - Python 3.12 compatible
 # scipy is required by scikit-learn
-# Model was trained with scikit-learn 1.2.2 - must match exactly
+# Model was trained with scikit-learn 1.2.2
+# Try 1.3.0 (first version with Python 3.12 support, should be backward compatible with 1.2.2 models)
 scipy==1.11.4
-scikit-learn==1.2.2
+scikit-learn==1.3.0
 numpy==1.24.3 
