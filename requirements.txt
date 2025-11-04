@@ -1,3 +1,5 @@
-# Optimized minimal dependencies - saves ~100MB by removing pandas
-scikit-learn==1.3.2
-numpy==1.24.3 
+# Optimized minimal dependencies - Python 3.12 compatible
+# scipy is required by scikit-learn
+scipy>=1.11.0
+scikit-learn>=1.3.0
+numpy>=1.24.0 
