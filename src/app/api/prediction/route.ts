@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
 
         predictionResult = await callPythonPrediction(
           modelTempPath, // Pass path instead of buffer
+          model.model_path, // Pass Supabase storage path for fallback
           featuresData
         );
 
@@ -169,6 +170,7 @@ export async function POST(request: NextRequest) {
         const mockFeatures = {}; // Placeholder
         predictionResult = await callPythonPrediction(
           modelTempPath, // Pass path instead of buffer
+          model.model_path, // Pass Supabase storage path for fallback
           mockFeatures
         );
       }
@@ -302,9 +304,11 @@ export async function POST(request: NextRequest) {
  * Call Python serverless function to run prediction
  * Uses Vercel's Python runtime via internal API call
  * Passes model file path instead of model data to avoid payload size limits
+ * Includes Supabase path as fallback if file not found locally
  */
 async function callPythonPrediction(
   modelPath: string,
+  supabaseStoragePath: string,
   features: any
 ): Promise<any> {
   try {
@@ -315,6 +319,10 @@ async function callPythonPrediction(
 
     console.log("[Python Prediction] Calling Python function at:", baseUrl);
     console.log("[Python Prediction] Model path:", modelPath);
+    console.log(
+      "[Python Prediction] Supabase storage path:",
+      supabaseStoragePath
+    );
 
     const response = await fetch(`${baseUrl}/api/run-prediction`, {
       method: "POST",
@@ -322,7 +330,8 @@ async function callPythonPrediction(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model_path: modelPath, // Pass path instead of base64 data
+        model_path: modelPath, // Local path (may not exist in Python container)
+        supabase_storage_path: supabaseStoragePath, // Fallback: download from Supabase
         features: features,
       }),
     });

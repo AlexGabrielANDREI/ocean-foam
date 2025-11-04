@@ -9,6 +9,9 @@ import json
 import pickle
 import numpy as np
 import warnings
+import os
+import urllib.request
+import tempfile
 warnings.filterwarnings('ignore')
 
 
@@ -113,35 +116,79 @@ class handler(BaseHTTPRequestHandler):
             
             # Extract parameters
             model_path = data.get('model_path')
+            supabase_storage_path = data.get('supabase_storage_path')
             features = data.get('features')
             
-            if not model_path or not features:
+            if not features:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    'error': 'Missing required parameters: model_path and features'
+                    'error': 'Missing required parameter: features'
                 }).encode())
                 return
             
-            # Load model from file path (shared /tmp directory)
-            try:
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f)
-            except FileNotFoundError:
+            # Try to load model from local path first
+            model = None
+            if model_path:
+                try:
+                    if os.path.exists(model_path):
+                        with open(model_path, 'rb') as f:
+                            model = pickle.load(f)
+                        print(f"[Python] Loaded model from local path: {model_path}")
+                except Exception as e:
+                    print(f"[Python] Failed to load from local path: {e}")
+            
+            # If not found locally, download from Supabase
+            if model is None and supabase_storage_path:
+                try:
+                    # Get Supabase credentials from environment
+                    supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
+                    supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+                    
+                    if not supabase_url or not supabase_key:
+                        raise Exception("Supabase credentials not found in environment")
+                    
+                    # Construct Supabase storage URL
+                    # Format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+                    storage_url = f"{supabase_url}/storage/v1/object/public/ml-models/{supabase_storage_path}"
+                    
+                    print(f"[Python] Downloading model from Supabase: {storage_url}")
+                    
+                    # Download model file
+                    req = urllib.request.Request(storage_url)
+                    req.add_header('apikey', supabase_key)
+                    req.add_header('Authorization', f'Bearer {supabase_key}')
+                    
+                    with urllib.request.urlopen(req) as response:
+                        model_data = response.read()
+                    
+                    # Save to temp file and load
+                    temp_dir = tempfile.gettempdir()
+                    temp_model_path = os.path.join(temp_dir, f"model_{hash(supabase_storage_path)}.pkl")
+                    with open(temp_model_path, 'wb') as f:
+                        f.write(model_data)
+                    
+                    with open(temp_model_path, 'rb') as f:
+                        model = pickle.load(f)
+                    
+                    print(f"[Python] Model downloaded and cached to: {temp_model_path}")
+                    
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'error': f'Failed to download model from Supabase: {str(e)}'
+                    }).encode())
+                    return
+            
+            if model is None:
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    'error': f'Model file not found at path: {model_path}'
-                }).encode())
-                return
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'error': f'Failed to load model: {str(e)}'
+                    'error': 'Model file not found locally and no Supabase storage path provided'
                 }).encode())
                 return
             
