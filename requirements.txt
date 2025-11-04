@@ -1,6 +1,7 @@
 # Optimized minimal dependencies - Python 3.12 compatible
 # scipy is required by scikit-learn
-# Model was trained with scikit-learn 1.4+ (has missing_go_to_left field)
-scipy>=1.11.0
-scikit-learn>=1.4.0
-numpy>=1.24.0 
+# Model was trained with scikit-learn 1.3.x (without missing_go_to_left field)
+# Pin exact versions to ensure compatibility
+scipy==1.11.4
+scikit-learn==1.3.2
+numpy==1.26.2 
