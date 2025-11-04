@@ -1,8 +1,11 @@
 # Exclude unnecessary files from Vercel deployment
 temp/
 *.pkl
-models/
-scripts/
+# models/ - REMOVED: was excluding src/app/api/models/ API routes
+scripts/predict_manual.py
+scripts/predict_api.py
+scripts/create_test_model.py
+scripts/requirements.txt
 .env.local
 node_modules/.cache/
 .next/cache/
