@@ -16,16 +16,23 @@ export async function GET(request: NextRequest) {
 
     // Check if payment gate is enabled
     const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
-    console.log("[DEBUG] Payment status check - Payment gate enabled:", paymentGateEnabled);
+    console.log(
+      "[DEBUG] Payment status check - Payment gate enabled:",
+      paymentGateEnabled
+    );
 
     if (!paymentGateEnabled) {
-      // Payment gate disabled - return valid payment status
-      console.log("[DEBUG] Payment status check - Returning valid payment (PAYMENT_GATE=false)");
+      // Payment gate disabled - return valid payment status with no expiry
+      // This allows the UI to show "Active" without expiry countdown
+      console.log(
+        "[DEBUG] Payment status check - Returning valid payment (PAYMENT_GATE=false)"
+      );
       return NextResponse.json({
         success: true,
         paymentStatus: {
           hasValidPayment: true,
           paymentGateEnabled: false,
+          expiresAt: null, // No expiry when payment gate is disabled
         },
       });
     }

@@ -82,6 +82,26 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
       }
     }, [user]);
 
+    // Auto-refresh EDA payment status when it's about to expire
+    useEffect(() => {
+      if (!edaPaymentStatus?.expiresAt || !edaPaymentStatus.hasValidPayment) {
+        return;
+      }
+
+      const timeUntilExpiry =
+        edaPaymentStatus.expiresAt.getTime() - new Date().getTime();
+
+      // Refresh 1 second after expiry, or immediately if already expired
+      const refreshDelay = Math.max(timeUntilExpiry + 1000, 1000);
+
+      const timeoutId = setTimeout(() => {
+        console.log("[DEBUG] Auto-refreshing EDA payment status after expiry");
+        checkEdaPaymentStatus();
+      }, refreshDelay);
+
+      return () => clearTimeout(timeoutId);
+    }, [edaPaymentStatus?.expiresAt, edaPaymentStatus?.hasValidPayment]);
+
     if (loading) {
       return (
         <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
@@ -132,8 +152,27 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
               <span className="text-slate-400">•</span>
               <div className="flex items-center space-x-1 text-xs text-slate-300">
                 <Clock className="w-3 h-3" />
-                <span>{formatTimeRemaining(edaPaymentStatus.expiresAt)}</span>
+                <span>
+                  {formatTimeRemaining(edaPaymentStatus.expiresAt)}
+                  {edaPaymentStatus.transactionHash === "MOCK_EDA_TX_HASH" && (
+                    <span
+                      className="ml-1 text-slate-400"
+                      title="Mock EDA access"
+                    >
+                      (Mock)
+                    </span>
+                  )}
+                </span>
               </div>
+            </>
+          )}
+
+          {edaPaymentStatus.hasValidPayment && !edaPaymentStatus.expiresAt && (
+            <>
+              <span className="text-slate-400">•</span>
+              <span className="text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
+                Payment gate disabled
+              </span>
             </>
           )}
 

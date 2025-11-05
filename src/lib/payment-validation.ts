@@ -129,14 +129,22 @@ export async function verifyUserPayment(
     console.log("[DEBUG] User found:", userData.id);
 
     // 2. Check if user has a recent prediction with valid transaction hash
-    const { data: recentPrediction, error } = await supabaseWithWallet
+    // Include mock predictions (MOCK_TX_HASH) when USE_MOCK_PREDICTIONS is enabled
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+
+    let query = supabaseWithWallet
       .from("predictions")
       .select("transaction_hash, created_at")
       .eq("user_id", userData.id)
-      .not("transaction_hash", "is", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    // If not in mock mode, filter out null transaction hashes
+    if (!useMockPredictions) {
+      query = query.not("transaction_hash", "is", null);
+    }
+
+    const { data: recentPrediction, error } = await query.single();
 
     console.log("[DEBUG] Database query result:", { recentPrediction, error });
 
@@ -148,7 +156,16 @@ export async function verifyUserPayment(
       };
     }
 
-    // 2. Check if payment is within validity window
+    // Ensure transaction_hash is not null
+    if (!recentPrediction.transaction_hash) {
+      console.log("[DEBUG] No transaction hash found in prediction");
+      return {
+        isValid: false,
+        reason: "No transaction hash found",
+      };
+    }
+
+    // 2. Check if payment is within validity window (same for mock and real)
     const paymentTime = new Date(recentPrediction.created_at);
     const now = new Date();
     const hoursSincePayment =
@@ -159,6 +176,7 @@ export async function verifyUserPayment(
       now: now.toISOString(),
       hoursSincePayment,
       maxHours: PAYMENT_VALIDITY_HOURS,
+      isMockPrediction: recentPrediction.transaction_hash === "MOCK_TX_HASH",
     });
 
     if (hoursSincePayment > PAYMENT_VALIDITY_HOURS) {
@@ -171,7 +189,20 @@ export async function verifyUserPayment(
       };
     }
 
-    // 3. Verify transaction on blockchain
+    // 3. For mock predictions, skip blockchain verification but still check expiry
+    const isMockPrediction =
+      recentPrediction.transaction_hash === "MOCK_TX_HASH";
+
+    if (isMockPrediction && useMockPredictions) {
+      console.log("[DEBUG] Mock prediction - skipping blockchain verification");
+      return {
+        isValid: true,
+        transactionHash: recentPrediction.transaction_hash,
+        paymentTime,
+      };
+    }
+
+    // 4. For real predictions, verify transaction on blockchain
     const blockchainVerification = await verifyTransactionOnChain(
       recentPrediction.transaction_hash!
     );
@@ -926,34 +957,22 @@ export async function getUserPaymentStatus(walletAddress: string): Promise<{
       return { hasValidPayment: false };
     }
 
-    // Skip expiry check for mock predictions (MOCK_TX_HASH)
-    const isMockPrediction =
-      recentPrediction.transaction_hash === "MOCK_TX_HASH";
-    if (isMockPrediction && useMockPredictions) {
-      // For mock predictions, always consider them valid while mock mode is enabled
-      const expiresAt = new Date(
-        Date.now() + PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
-      );
-      return {
-        hasValidPayment: true,
-        lastPaymentTime: new Date(recentPrediction.created_at),
-        transactionHash: recentPrediction.transaction_hash,
-        expiresAt,
-      };
-    }
-
-    // For real predictions, ensure transaction_hash is not null
+    // For all predictions (including mock), ensure transaction_hash is not null
     if (!recentPrediction.transaction_hash) {
       console.log("[DEBUG] No transaction hash found in prediction");
       return { hasValidPayment: false };
     }
 
+    // Calculate expiry based on prediction's created_at timestamp (same for mock and real)
     const paymentTime = new Date(recentPrediction.created_at);
     const expiresAt = new Date(
       paymentTime.getTime() + PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
     );
     const now = new Date();
     const isExpired = now > expiresAt;
+
+    const isMockPrediction =
+      recentPrediction.transaction_hash === "MOCK_TX_HASH";
 
     console.log("[DEBUG] Payment status check:", {
       paymentTime: paymentTime.toISOString(),
@@ -963,8 +982,11 @@ export async function getUserPaymentStatus(walletAddress: string): Promise<{
       hoursSincePayment:
         (now.getTime() - paymentTime.getTime()) / (1000 * 60 * 60),
       maxHours: PAYMENT_VALIDITY_HOURS,
+      isMockPrediction,
     });
 
+    // Mock predictions expire based on created_at timestamp, just like real predictions
+    // The only difference is they skip blockchain verification
     return {
       hasValidPayment: !isExpired,
       lastPaymentTime: paymentTime,

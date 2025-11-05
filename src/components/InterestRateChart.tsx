@@ -114,20 +114,9 @@ export default function InterestRateChart({
     }
   }, [currentTransactionHash, paymentComplete]);
 
-  // Monitor EDA transaction hash changes and run EDA download when set
-  useEffect(() => {
-    if (
-      currentEdaTransactionHash &&
-      currentEdaTransactionHash.trim() !== "" &&
-      edaPaymentComplete
-    ) {
-      console.log(
-        "[DEBUG] EDA Transaction hash changed, running EDA download:",
-        currentEdaTransactionHash
-      );
-      handleEdaDownload();
-    }
-  }, [currentEdaTransactionHash, edaPaymentComplete]);
+  // REMOVED: Auto-download on transaction hash change
+  // EDA downloads should only happen when user clicks "EXPLORE EDA" button
+  // This prevents automatic downloads on page load
 
   const loadInterestRateData = async () => {
     try {
@@ -346,10 +335,15 @@ export default function InterestRateChart({
         const hasValidEdaPayment = data.edaPaymentStatus.hasValidPayment;
         setEdaPaymentRequired(!hasValidEdaPayment);
 
-        // If we have a valid payment, also set the transaction hash for future downloads
+        // Store transaction hash for future downloads, but DON'T auto-download
+        // Downloads should only happen when user clicks "EXPLORE EDA" button
         if (hasValidEdaPayment && data.edaPaymentStatus.transactionHash) {
           setCurrentEdaTransactionHash(data.edaPaymentStatus.transactionHash);
           setEdaPaymentComplete(true);
+        } else {
+          // Clear state if no valid payment
+          setCurrentEdaTransactionHash("");
+          setEdaPaymentComplete(false);
         }
 
         console.log("[DEBUG] EDA Payment status check:", {
@@ -360,16 +354,30 @@ export default function InterestRateChart({
       } else {
         console.error("Failed to check EDA payment status");
         setEdaPaymentRequired(true); // Default to requiring payment if check fails
+        setCurrentEdaTransactionHash("");
+        setEdaPaymentComplete(false);
       }
     } catch (error) {
       console.error("EDA Payment status check error:", error);
       setEdaPaymentRequired(true); // Default to requiring payment if check fails
+      setCurrentEdaTransactionHash("");
+      setEdaPaymentComplete(false);
     }
   };
 
   const handleEdaDownload = async () => {
     if (!activeModel) {
       toast("No active model available", { icon: "⚠️" });
+      return;
+    }
+
+    // Check payment status before attempting download
+    // If payment is required but not complete, show payment modal instead
+    if (edaPaymentRequired && !edaPaymentComplete) {
+      console.log(
+        "[DEBUG] EDA Download - Payment required, showing payment modal"
+      );
+      setShowEdaPaymentModal(true);
       return;
     }
 
@@ -793,7 +801,7 @@ export default function InterestRateChart({
               }
 
               toast.success(
-                "EDA payment successful! Download will start automatically."
+                "EDA payment successful! You can now download the EDA report."
               );
             }}
           />

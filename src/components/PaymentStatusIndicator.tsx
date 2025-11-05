@@ -83,6 +83,26 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
       }
     }, [user]);
 
+    // Auto-refresh payment status when it's about to expire
+    useEffect(() => {
+      if (!paymentStatus?.expiresAt || !paymentStatus.hasValidPayment) {
+        return;
+      }
+
+      const timeUntilExpiry =
+        paymentStatus.expiresAt.getTime() - new Date().getTime();
+
+      // Refresh 1 second after expiry, or immediately if already expired
+      const refreshDelay = Math.max(timeUntilExpiry + 1000, 1000);
+
+      const timeoutId = setTimeout(() => {
+        console.log("[DEBUG] Auto-refreshing payment status after expiry");
+        checkPaymentStatus();
+      }, refreshDelay);
+
+      return () => clearTimeout(timeoutId);
+    }, [paymentStatus?.expiresAt, paymentStatus?.hasValidPayment]);
+
     if (loading) {
       return (
         <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
@@ -133,8 +153,27 @@ const PaymentStatusIndicator = forwardRef<PaymentStatusIndicatorRef>(
               <span className="text-slate-400">•</span>
               <div className="flex items-center space-x-1 text-xs text-slate-300">
                 <Clock className="w-3 h-3" />
-                <span>{formatTimeRemaining(paymentStatus.expiresAt)}</span>
+                <span>
+                  {formatTimeRemaining(paymentStatus.expiresAt)}
+                  {paymentStatus.transactionHash === "MOCK_TX_HASH" && (
+                    <span
+                      className="ml-1 text-slate-400"
+                      title="Mock prediction"
+                    >
+                      (Mock)
+                    </span>
+                  )}
+                </span>
               </div>
+            </>
+          )}
+
+          {paymentStatus.hasValidPayment && !paymentStatus.expiresAt && (
+            <>
+              <span className="text-slate-400">•</span>
+              <span className="text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
+                Payment gate disabled
+              </span>
             </>
           )}
 
