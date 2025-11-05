@@ -258,8 +258,8 @@ export default function InterestRateChart({
       const result = await response.json();
       console.log("[DEBUG] API Success response:", result);
 
-      // Add 10 second delay before showing results
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      // Add 5 second delay before showing results
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       setPredictionResult(result.prediction);
       toast.success("Prediction completed successfully!");
