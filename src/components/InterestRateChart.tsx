@@ -257,6 +257,10 @@ export default function InterestRateChart({
       }
       const result = await response.json();
       console.log("[DEBUG] API Success response:", result);
+
+      // Add 10 second delay before showing results
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+
       setPredictionResult(result.prediction);
       toast.success("Prediction completed successfully!");
 
@@ -583,7 +587,7 @@ export default function InterestRateChart({
 
               <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4 rounded-xl border border-blue-500/20">
                 <h4 className="font-semibold text-foreground mb-2">
-                  October 28–29, 2025
+                  December 09-10, 2025
                 </h4>
                 <p className="text-sm text-secondary-600 leading-relaxed">
                   The Federal Open Market Committee will convene to assess

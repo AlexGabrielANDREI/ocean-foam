@@ -34,6 +34,127 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if mock mode is enabled
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+
+    if (useMockPredictions) {
+      console.log("[DEBUG] Using mock predictions (USE_MOCK_PREDICTIONS=true)");
+
+      // Load mock data from config file
+      try {
+        const configPath = path.join(
+          process.cwd(),
+          "config",
+          "mock-prediction.json"
+        );
+        const mockData = JSON.parse(await readFile(configPath, "utf-8"));
+
+        // Still validate payment if gate is enabled
+        const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
+        let paymentValidation: any = null;
+
+        if (paymentGateEnabled) {
+          console.log("[DEBUG] Validating payment for wallet:", walletAddress);
+          paymentValidation = await verifyUserPayment(
+            walletAddress,
+            transactionHash && transactionHash.trim() !== ""
+              ? transactionHash
+              : undefined
+          );
+
+          console.log("[DEBUG] Payment validation result:", paymentValidation);
+
+          if (!paymentValidation.isValid) {
+            console.log(
+              "[DEBUG] Payment validation failed:",
+              paymentValidation.reason
+            );
+            return NextResponse.json(
+              { error: `Payment required: ${paymentValidation.reason}` },
+              { status: 402 }
+            );
+          }
+
+          console.log("[DEBUG] Payment validation successful");
+        } else {
+          console.log(
+            "[DEBUG] Payment validation SKIPPED (PAYMENT_GATE=false)"
+          );
+        }
+
+        // Look up user by wallet address
+        const { data: user, error: userError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("wallet_address", walletAddress)
+          .single();
+
+        if (userError || !user) {
+          console.error("User lookup error:", userError);
+          console.error("User lookup failed for wallet:", walletAddress);
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+
+        console.log("User found:", { userId: user.id, walletAddress });
+
+        // Find active model
+        const { data: model } = await supabase
+          .from("models")
+          .select("id")
+          .eq("is_active", true)
+          .single();
+
+        if (model) {
+          // Log mock prediction to database
+          const supabaseWithWallet = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            {
+              global: {
+                headers: {
+                  "x-wallet-address": walletAddress,
+                },
+              },
+            }
+          );
+
+          const { error: insertError } = await supabaseWithWallet
+            .from("predictions")
+            .insert({
+              user_id: user.id,
+              model_id: model.id,
+              prediction_result: mockData.prediction.toString(),
+              prediction_score: mockData.confidence,
+              features_used: "mock",
+              features_data: mockData.probabilities,
+              transaction_hash:
+                paymentValidation?.transactionHash || transactionHash || null,
+            });
+
+          if (insertError) {
+            console.error("Insert mock prediction error:", insertError);
+          } else {
+            console.log("Mock prediction inserted successfully");
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          prediction: mockData,
+          tokens_remaining: 0,
+        });
+      } catch (error) {
+        console.error("[DEBUG] Failed to load mock prediction config:", error);
+        return NextResponse.json(
+          { error: "Failed to load mock prediction configuration" },
+          { status: 500 }
+        );
+      }
+    }
+
     // Check if payment gate is enabled
     const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
     console.log("[DEBUG] Payment gate enabled:", paymentGateEnabled);
