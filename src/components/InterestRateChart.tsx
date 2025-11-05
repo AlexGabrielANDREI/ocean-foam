@@ -75,6 +75,7 @@ export default function InterestRateChart({
     useState<string>("");
   const [paymentExpiryTimer, setPaymentExpiryTimer] =
     useState<NodeJS.Timeout | null>(null);
+  const [chartHeight, setChartHeight] = useState(300);
 
   // EDA Payment states
   const [showEdaPaymentModal, setShowEdaPaymentModal] = useState(false);
@@ -88,6 +89,16 @@ export default function InterestRateChart({
     loadActiveModel();
     loadLatestPrediction();
     checkEdaPaymentStatus();
+
+    // Set initial chart height based on window size
+    const updateChartHeight = () => {
+      setChartHeight(window.innerWidth < 640 ? 250 : 300);
+    };
+
+    updateChartHeight();
+    window.addEventListener("resize", updateChartHeight);
+
+    return () => window.removeEventListener("resize", updateChartHeight);
   }, [user]); // Re-run when user changes (login/logout)
 
   // Cleanup timer on unmount
@@ -242,6 +253,18 @@ export default function InterestRateChart({
       if (!response.ok) {
         const error = await response.json();
         console.log("[DEBUG] API Error response:", error);
+
+        // If payment required (402), show payment modal instead of error
+        if (response.status === 402) {
+          console.log("[DEBUG] Payment required, showing payment modal");
+          // Refresh payment status first to ensure paymentRequired is updated
+          onRefreshPaymentStatus && onRefreshPaymentStatus();
+          // Show payment modal
+          onShowPaymentModal && onShowPaymentModal();
+          toast.error(error.error || "Payment required to run predictions");
+          return;
+        }
+
         throw new Error(error.error || "Prediction failed");
       }
       const result = await response.json();
@@ -267,6 +290,10 @@ export default function InterestRateChart({
         setPredictionResult(null);
         setPaymentComplete(false);
         setCurrentTransactionHash("");
+
+        // Refresh payment status to update paymentRequired prop
+        onRefreshPaymentStatus && onRefreshPaymentStatus();
+
         toast(
           "Payment expired. Please make a new payment to run predictions.",
           { icon: "ℹ️" }
@@ -555,10 +582,10 @@ export default function InterestRateChart({
     <div className="space-y-6">
       {/* Jerome Powell FOMC Meeting Card */}
       <div className="card">
-        <div className="flex items-start space-x-6">
+        <div className="flex flex-col sm:flex-row sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
           {/* Jerome Powell Photo */}
-          <div className="flex-shrink-0">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center overflow-hidden">
+          <div className="flex-shrink-0 mx-auto sm:mx-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl sm:rounded-2xl flex items-center justify-center overflow-hidden">
               <img
                 src="/jerome-powell.jpeg"
                 alt="Jerome Powell"
@@ -570,38 +597,38 @@ export default function InterestRateChart({
                   target.nextElementSibling?.classList.remove("hidden");
                 }}
               />
-              <User className="w-10 h-10 text-white hidden" />
+              <User className="w-8 h-8 sm:w-10 sm:h-10 text-white hidden" />
             </div>
           </div>
 
           {/* Meeting Information */}
           <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-3">
-              <h3 className="text-xl font-bold text-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-3">
+              <h3 className="text-lg sm:text-xl font-bold text-foreground">
                 Jerome Powell
               </h3>
-              <span className="bg-accent-green text-black px-3 py-1 rounded-full text-xs font-semibold">
+              <span className="bg-accent-green text-black px-2 sm:px-3 py-1 rounded-full text-xs font-semibold w-fit">
                 Fed Chair
               </span>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center space-x-4">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                 <div className="flex items-center space-x-2 text-secondary-500">
-                  <Building2 className="w-4 h-4" />
-                  <span className="text-sm">Federal Reserve</span>
+                  <Building2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Federal Reserve</span>
                 </div>
                 <div className="flex items-center space-x-2 text-secondary-500">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm">Next FOMC Meeting</span>
+                  <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Next FOMC Meeting</span>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4 rounded-xl border border-blue-500/20">
-                <h4 className="font-semibold text-foreground mb-2">
+              <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-3 sm:p-4 rounded-xl border border-blue-500/20">
+                <h4 className="font-semibold text-foreground mb-2 text-sm sm:text-base">
                   December 09-10, 2025
                 </h4>
-                <p className="text-sm text-secondary-600 leading-relaxed">
+                <p className="text-xs sm:text-sm text-secondary-600 leading-relaxed">
                   The Federal Open Market Committee will convene to assess
                   economic conditions and determine the target range for the
                   federal funds rate. This meeting will be crucial for
@@ -615,30 +642,30 @@ export default function InterestRateChart({
 
       {/* Chart with Integrated Prediction */}
       <div className="card overflow-hidden">
-        <div className="card-header mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-white" />
+        <div className="card-header mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 className="text-base sm:text-lg font-semibold text-foreground">
                   US Federal Funds Rate
                 </h3>
-                <p className="text-sm text-secondary-600">
+                <p className="text-xs sm:text-sm text-secondary-600">
                   Historical trends & AI-powered predictions
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 text-sm text-secondary-500">
-              <Calendar className="w-4 h-4" />
+            <div className="flex items-center space-x-2 text-xs sm:text-sm text-secondary-500">
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>1998 - 2024</span>
             </div>
           </div>
         </div>
 
         <div className="relative">
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <AreaChart
               data={chartData}
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
@@ -687,12 +714,14 @@ export default function InterestRateChart({
 
           {/* Current Rate Indicator */}
           {chartData.length > 0 && (
-            <div className="absolute top-4 right-4 glass px-4 py-2 rounded-xl border border-border">
-              <div className="flex items-center space-x-2">
-                <Percent className="w-4 h-4 text-accent-green" />
+            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 glass px-2 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl border border-border">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <Percent className="w-3 h-3 sm:w-4 sm:h-4 text-accent-green flex-shrink-0" />
                 <div>
-                  <p className="text-xs text-secondary-500">Current Rate</p>
-                  <p className="text-lg font-bold text-foreground">
+                  <p className="text-[10px] sm:text-xs text-secondary-500">
+                    Current Rate
+                  </p>
+                  <p className="text-sm sm:text-lg font-bold text-foreground">
                     {chartData[chartData.length - 1].rate}%
                   </p>
                 </div>
@@ -702,10 +731,10 @@ export default function InterestRateChart({
 
           {/* Prediction Button Overlay */}
           {activeModel && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-3">
+            <div className="absolute bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto px-4 sm:px-0">
               <button
                 onClick={handlePredictClick}
-                className="btn-primary flex items-center space-x-2 shadow-lg"
+                className="btn-primary flex items-center justify-center space-x-2 shadow-lg text-sm sm:text-base px-3 sm:px-6 py-2 sm:py-3 w-full sm:w-auto"
                 disabled={
                   predictionLoading ||
                   (paymentRequired && paymentComplete) ||
@@ -738,7 +767,7 @@ export default function InterestRateChart({
                     handleEdaDownload();
                   }
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 shadow-lg transition-colors"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center space-x-2 shadow-lg transition-colors text-sm sm:text-base w-full sm:w-auto"
               >
                 <BarChart3 className="w-4 h-4" />
                 <span>Explore EDA</span>
@@ -809,22 +838,22 @@ export default function InterestRateChart({
 
         {/* Prediction Result */}
         {predictionResult && (
-          <div className="mt-6 p-6 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
-            <h4 className="font-semibold text-foreground mb-4 flex items-center space-x-2">
+          <div className="mt-4 sm:mt-6 p-4 sm:p-6 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+            <h4 className="font-semibold text-foreground mb-3 sm:mb-4 flex items-center space-x-2 text-sm sm:text-base">
               <span className="w-2 h-2 bg-green-500 rounded-full"></span>
               <span>AI Prediction Result</span>
             </h4>
 
             {/* Main Prediction Display */}
-            <div className="text-center mb-6">
-              <div className="text-4xl font-bold text-teal-400 mb-2">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="text-3xl sm:text-4xl font-bold text-teal-400 mb-2">
                 {typeof predictionResult.prediction === "number"
                   ? `${
                       predictionResult.prediction > 0 ? "+" : ""
                     }${predictionResult.prediction.toFixed(2)}%`
                   : predictionResult.prediction}
               </div>
-              <div className="text-sm text-slate-300 mb-1">
+              <div className="text-xs sm:text-sm text-slate-300 mb-1">
                 Predicted Rate Change
               </div>
               <div className="text-xs text-slate-400">
@@ -837,8 +866,8 @@ export default function InterestRateChart({
 
             {/* Top 3 Scenarios */}
             {predictionResult.probabilities && (
-              <div className="space-y-3">
-                <h5 className="text-sm font-medium text-slate-300 mb-3">
+              <div className="space-y-2 sm:space-y-3">
+                <h5 className="text-xs sm:text-sm font-medium text-slate-300 mb-2 sm:mb-3">
                   Top 3 Scenarios
                 </h5>
                 {Object.entries(predictionResult.probabilities)
@@ -861,20 +890,22 @@ export default function InterestRateChart({
                     return (
                       <div
                         key={scenario}
-                        className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50"
+                        className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-slate-800/50"
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2 sm:space-x-3">
                           <div
-                            className={`w-2 h-2 ${bgColor} rounded-full`}
+                            className={`w-2 h-2 ${bgColor} rounded-full flex-shrink-0`}
                           ></div>
-                          <span className="text-sm text-slate-300">
+                          <span className="text-xs sm:text-sm text-slate-300">
                             {index + 1}
                           </span>
-                          <span className={`text-sm font-medium ${color}`}>
+                          <span
+                            className={`text-xs sm:text-sm font-medium ${color}`}
+                          >
                             {scenario}
                           </span>
                         </div>
-                        <span className={`text-sm font-medium ${color}`}>
+                        <span className="text-xs sm:text-sm font-bold text-slate-200">
                           {((probability as number) * 100).toFixed(1)}%
                         </span>
                       </div>
@@ -886,9 +917,9 @@ export default function InterestRateChart({
         )}
 
         {/* Chart Legend */}
-        <div className="mt-4 flex items-center justify-center space-x-6 text-sm text-secondary-500">
+        <div className="mt-4 flex items-center justify-center space-x-4 sm:space-x-6 text-xs sm:text-sm text-secondary-500">
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full"></div>
             <span>Federal Funds Rate</span>
           </div>
         </div>

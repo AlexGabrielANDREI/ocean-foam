@@ -17,6 +17,7 @@ export default function Dashboard() {
   const { user, isAdmin } = useAuth();
   const pathname = usePathname();
   const [currentRoute, setCurrentRoute] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const topNavigationRef = useRef<TopNavigationRef>(null);
 
   // Update current route when pathname changes
@@ -43,6 +44,9 @@ export default function Dashboard() {
   // Handle route changes - update URL without full navigation
   const handleRouteChange = (route: string) => {
     setCurrentRoute(route);
+
+    // Close sidebar on mobile when route changes
+    setSidebarOpen(false);
 
     // Update the URL without triggering a page reload
     const newPath = (() => {
@@ -102,12 +106,36 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-slate-950">
-      <Sidebar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
-      <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
-        <TopNavigation ref={topNavigationRef} />
-        <main className="flex-1 p-6 lg:p-8 overflow-auto bg-slate-950">
-          <div className="rounded-3xl p-6 lg:p-8 glass">{renderContent()}</div>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-slate-950">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Hidden on mobile, visible on lg+ */}
+      <div
+        className={`fixed lg:static inset-y-0 left-0 z-50 lg:z-auto transform ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:translate-x-0 transition-transform duration-300 ease-in-out`}
+      >
+        <Sidebar
+          currentRoute={currentRoute}
+          onRouteChange={handleRouteChange}
+        />
+      </div>
+
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden">
+        <TopNavigation
+          ref={topNavigationRef}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+        />
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-auto bg-slate-950">
+          <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 glass">
+            {renderContent()}
+          </div>
         </main>
       </div>
     </div>

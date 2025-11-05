@@ -136,23 +136,23 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
     };
 
     return (
-      <div className="glass border border-white/10 rounded-lg px-3 py-2 shadow-sm">
-        <div className="flex items-center space-x-2">
+      <div className="glass border border-white/10 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm">
+        <div className="flex items-center space-x-1 sm:space-x-2">
           {edaPaymentStatus.hasValidPayment ? (
-            <CheckCircle className="w-3 h-3 text-blue-500" />
+            <CheckCircle className="w-3 h-3 text-blue-500 flex-shrink-0" />
           ) : (
-            <XCircle className="w-3 h-3 text-purple-400" />
+            <XCircle className="w-3 h-3 text-purple-400 flex-shrink-0" />
           )}
-          <span className="text-xs font-medium text-slate-200">
+          <span className="text-xs font-medium text-slate-200 whitespace-nowrap">
             {edaPaymentStatus.hasValidPayment ? "EDA Active" : "EDA Inactive"}
           </span>
 
           {edaPaymentStatus.hasValidPayment && edaPaymentStatus.expiresAt && (
             <>
-              <span className="text-slate-400">•</span>
+              <span className="text-slate-400 hidden sm:inline">•</span>
               <div className="flex items-center space-x-1 text-xs text-slate-300">
-                <Clock className="w-3 h-3" />
-                <span>
+                <Clock className="w-3 h-3 flex-shrink-0" />
+                <span className="whitespace-nowrap">
                   {formatTimeRemaining(edaPaymentStatus.expiresAt)}
                   {edaPaymentStatus.transactionHash === "MOCK_EDA_TX_HASH" && (
                     <span
@@ -167,8 +167,8 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
 
           {edaPaymentStatus.hasValidPayment && !edaPaymentStatus.expiresAt && (
             <>
-              <span className="text-slate-400">•</span>
-              <span className="text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-xs text-green-300 bg-green-500/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded whitespace-nowrap">
                 Payment gate disabled
               </span>
             </>
@@ -176,9 +176,9 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
 
           {!edaPaymentStatus.hasValidPayment && (
             <>
-              <span className="text-slate-400">•</span>
-              <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-1 rounded">
-                Payment required for EDA access
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-xs text-purple-300 bg-purple-500/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded whitespace-nowrap hidden sm:inline">
+                Payment required
               </span>
             </>
           )}
@@ -189,7 +189,7 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
               console.log("[DEBUG] Manual EDA refresh clicked");
               checkEdaPaymentStatus();
             }}
-            className="text-xs text-slate-400 hover:text-slate-200 ml-2"
+            className="text-xs text-slate-400 hover:text-slate-200 ml-1 sm:ml-2 flex-shrink-0"
             title="Refresh EDA payment status"
           >
             ↻
