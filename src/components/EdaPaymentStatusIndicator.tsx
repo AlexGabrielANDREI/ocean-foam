@@ -158,9 +158,7 @@ const EdaPaymentStatusIndicator = forwardRef<EdaPaymentStatusIndicatorRef>(
                     <span
                       className="ml-1 text-slate-400"
                       title="Mock EDA access"
-                    >
-                      (Mock)
-                    </span>
+                    ></span>
                   )}
                 </span>
               </div>
