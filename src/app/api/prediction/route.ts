@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         // Find active model
         const { data: model } = await supabase
           .from("models")
-          .select("id")
+          .select("id, use_manual_features")
           .eq("is_active", true)
           .single();
 
@@ -121,6 +121,17 @@ export async function POST(request: NextRequest) {
             }
           );
 
+          // Always include a transaction hash for mock predictions (even if fake)
+          // This ensures payment status checks work correctly
+          const mockTransactionHash =
+            paymentValidation?.transactionHash ||
+            transactionHash ||
+            "MOCK_TX_HASH";
+
+          // Use model's features_used type (manual or api) instead of "mock"
+          // Database constraint only allows "manual" or "api"
+          const featuresUsed = model.use_manual_features ? "manual" : "api";
+
           const { error: insertError } = await supabaseWithWallet
             .from("predictions")
             .insert({
@@ -128,10 +139,9 @@ export async function POST(request: NextRequest) {
               model_id: model.id,
               prediction_result: mockData.prediction.toString(),
               prediction_score: mockData.confidence,
-              features_used: "mock",
+              features_used: featuresUsed,
               features_data: mockData.probabilities,
-              transaction_hash:
-                paymentValidation?.transactionHash || transactionHash || null,
+              transaction_hash: mockTransactionHash,
             });
 
           if (insertError) {
@@ -141,10 +151,21 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Calculate expiry time based on PAYMENT_VALIDITY_HOURS
+        const PAYMENT_VALIDITY_HOURS = parseFloat(
+          process.env.PAYMENT_VALIDITY_HOURS || "0.0167"
+        );
+        const expiresAt = new Date(
+          Date.now() + PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
+        );
+        const timeRemaining = PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000;
+
         return NextResponse.json({
           success: true,
           prediction: mockData,
           tokens_remaining: 0,
+          expiresAt: expiresAt.toISOString(),
+          timeRemaining: timeRemaining,
         });
       } catch (error) {
         console.error("[DEBUG] Failed to load mock prediction config:", error);
@@ -406,10 +427,21 @@ export async function POST(request: NextRequest) {
 
       console.log("Prediction inserted successfully");
 
+      // Calculate expiry time based on PAYMENT_VALIDITY_HOURS
+      const PAYMENT_VALIDITY_HOURS = parseFloat(
+        process.env.PAYMENT_VALIDITY_HOURS || "0.0167"
+      );
+      const expiresAt = new Date(
+        Date.now() + PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
+      );
+      const timeRemaining = PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000;
+
       return NextResponse.json({
         success: true,
         prediction: predictionResult,
         tokens_remaining: 0,
+        expiresAt: expiresAt.toISOString(),
+        timeRemaining: timeRemaining,
       });
     } finally {
       // Only clean up non-cached temp files (do not delete cached model file)

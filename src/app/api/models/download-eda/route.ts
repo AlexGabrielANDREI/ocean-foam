@@ -40,11 +40,20 @@ export async function GET(request: NextRequest) {
 
     // Check if payment gate is enabled
     const paymentGateEnabled = process.env.PAYMENT_GATE !== "false";
-    console.log("[DEBUG] EDA Download - Payment gate enabled:", paymentGateEnabled);
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+    console.log(
+      "[DEBUG] EDA Download - Payment gate enabled:",
+      paymentGateEnabled
+    );
+    console.log(
+      "[DEBUG] EDA Download - Mock mode enabled:",
+      useMockPredictions
+    );
 
     // Validate EDA payment
     let paymentValidation: any = null;
-    if (paymentGateEnabled) {
+    if (paymentGateEnabled && !useMockPredictions) {
+      // Only validate blockchain payments when not in mock mode
       console.log(
         "[DEBUG] EDA Download - Validating EDA payment for wallet:",
         walletAddress
@@ -73,8 +82,19 @@ export async function GET(request: NextRequest) {
       }
 
       console.log("[DEBUG] EDA Download - EDA Payment validation successful");
+    } else if (paymentGateEnabled && useMockPredictions) {
+      // In mock mode, accept any transaction hash or create a mock one
+      console.log(
+        "[DEBUG] EDA Download - Mock mode: accepting EDA access without blockchain verification"
+      );
+      paymentValidation = {
+        isValid: true,
+        transactionHash: transactionHash || "MOCK_EDA_TX_HASH",
+      };
     } else {
-      console.log("[DEBUG] EDA Download - Payment validation SKIPPED (PAYMENT_GATE=false)");
+      console.log(
+        "[DEBUG] EDA Download - Payment validation SKIPPED (PAYMENT_GATE=false)"
+      );
     }
 
     // Get user details for recording access (use wallet-specific client like predictions)
@@ -94,8 +114,11 @@ export async function GET(request: NextRequest) {
 
     // Record EDA access transaction for every successful download
     // This ensures the 5-minute window is tracked properly
+    // In mock mode, use MOCK_EDA_TX_HASH if no transaction hash provided
     const transactionHashToRecord =
-      paymentValidation?.transactionHash || transactionHash || "eda_access_" + Date.now();
+      paymentValidation?.transactionHash ||
+      transactionHash ||
+      (useMockPredictions ? "MOCK_EDA_TX_HASH" : "eda_access_" + Date.now());
 
     console.log(
       "[DEBUG] EDA Download - Recording EDA access transaction:",

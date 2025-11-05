@@ -24,6 +24,7 @@ export interface PaymentValidationResult {
   transactionHash?: string;
   paymentAmount?: string;
   paymentTime?: Date;
+  expiresAt?: Date;
 }
 
 /**
@@ -496,14 +497,22 @@ export async function verifyEdaPayment(
     console.log("[DEBUG] User found for EDA payment:", userData.id);
 
     // 2. Check if user has a recent EDA access with valid transaction hash
-    const { data: recentEdaAccess, error } = await supabaseWithWallet
+    // Include mock EDA access (MOCK_EDA_TX_HASH) when USE_MOCK_PREDICTIONS is enabled
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+
+    let query = supabaseWithWallet
       .from("eda_access")
       .select("transaction_hash, created_at")
       .eq("user_id", userData.id)
-      .not("transaction_hash", "is", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    // If not in mock mode, filter out null transaction hashes
+    if (!useMockPredictions) {
+      query = query.not("transaction_hash", "is", null);
+    }
+
+    const { data: recentEdaAccess, error } = await query.single();
 
     console.log("[DEBUG] EDA Database query result:", {
       recentEdaAccess,
@@ -515,6 +524,31 @@ export async function verifyEdaPayment(
       return {
         isValid: false,
         reason: "No recent EDA payment found",
+      };
+    }
+
+    // Skip expiry and blockchain check for mock EDA access (MOCK_EDA_TX_HASH)
+    const isMockEdaAccess =
+      recentEdaAccess.transaction_hash === "MOCK_EDA_TX_HASH";
+    if (isMockEdaAccess && useMockPredictions) {
+      // For mock EDA access, always consider them valid while mock mode is enabled
+      const expiresAt = new Date(
+        Date.now() + EDA_PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
+      );
+      return {
+        isValid: true,
+        transactionHash: recentEdaAccess.transaction_hash,
+        paymentTime: new Date(recentEdaAccess.created_at),
+        expiresAt,
+      };
+    }
+
+    // For real EDA access, ensure transaction_hash is not null
+    if (!recentEdaAccess.transaction_hash) {
+      console.log("[DEBUG] No transaction hash found in EDA access");
+      return {
+        isValid: false,
+        reason: "No transaction hash found in EDA access",
       };
     }
 
@@ -869,18 +903,48 @@ export async function getUserPaymentStatus(walletAddress: string): Promise<{
     }
 
     // Get the most recent prediction (payment)
+    // Include mock predictions (MOCK_TX_HASH) when USE_MOCK_PREDICTIONS is enabled
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+
+    let query = supabaseWithWallet
+      .from("predictions")
+      .select("transaction_hash, created_at")
+      .eq("user_id", userData.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    // If not in mock mode, filter out null transaction hashes
+    if (!useMockPredictions) {
+      query = query.not("transaction_hash", "is", null);
+    }
+
     const { data: recentPrediction, error: predictionError } =
-      await supabaseWithWallet
-        .from("predictions")
-        .select("transaction_hash, created_at")
-        .eq("user_id", userData.id)
-        .not("transaction_hash", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      await query.single();
 
     if (predictionError || !recentPrediction) {
       console.log("[DEBUG] No recent payment found:", predictionError);
+      return { hasValidPayment: false };
+    }
+
+    // Skip expiry check for mock predictions (MOCK_TX_HASH)
+    const isMockPrediction =
+      recentPrediction.transaction_hash === "MOCK_TX_HASH";
+    if (isMockPrediction && useMockPredictions) {
+      // For mock predictions, always consider them valid while mock mode is enabled
+      const expiresAt = new Date(
+        Date.now() + PAYMENT_VALIDITY_HOURS * 60 * 60 * 1000
+      );
+      return {
+        hasValidPayment: true,
+        lastPaymentTime: new Date(recentPrediction.created_at),
+        transactionHash: recentPrediction.transaction_hash,
+        expiresAt,
+      };
+    }
+
+    // For real predictions, ensure transaction_hash is not null
+    if (!recentPrediction.transaction_hash) {
+      console.log("[DEBUG] No transaction hash found in prediction");
       return { hasValidPayment: false };
     }
 

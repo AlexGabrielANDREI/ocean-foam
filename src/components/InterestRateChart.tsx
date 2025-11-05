@@ -264,10 +264,14 @@ export default function InterestRateChart({
       setPredictionResult(result.prediction);
       toast.success("Prediction completed successfully!");
 
-      // Set timer to clear prediction result after payment expires (1 minute)
+      // Set timer to clear prediction result after payment expires
+      // Use timeRemaining from API response if available, otherwise default to 60 seconds
       if (paymentExpiryTimer) {
         clearTimeout(paymentExpiryTimer);
       }
+
+      const expiryTime = result.timeRemaining || 60000; // Use API response or fallback to 60s
+      console.log("[DEBUG] Setting payment expiry timer for", expiryTime, "ms");
 
       const timer = setTimeout(() => {
         console.log("[DEBUG] Payment expired, clearing prediction result");
@@ -278,7 +282,7 @@ export default function InterestRateChart({
           "Payment expired. Please make a new payment to run predictions.",
           { icon: "ℹ️" }
         );
-      }, 60000); // 1 minute = 60,000ms
+      }, expiryTime);
 
       setPaymentExpiryTimer(timer);
 

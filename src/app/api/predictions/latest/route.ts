@@ -41,17 +41,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the most recent prediction with transaction hash
+    // Include mock predictions (MOCK_TX_HASH) when USE_MOCK_PREDICTIONS is enabled
+    const useMockPredictions = process.env.USE_MOCK_PREDICTIONS === "true";
+
+    let query = supabaseWithWallet
+      .from("predictions")
+      .select(
+        "prediction_result, prediction_score, features_data, created_at, transaction_hash"
+      )
+      .eq("user_id", userData.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    // If not in mock mode, filter out null transaction hashes
+    if (!useMockPredictions) {
+      query = query.not("transaction_hash", "is", null);
+    }
+
     const { data: latestPrediction, error: predictionError } =
-      await supabaseWithWallet
-        .from("predictions")
-        .select(
-          "prediction_result, prediction_score, features_data, created_at, transaction_hash"
-        )
-        .eq("user_id", userData.id)
-        .not("transaction_hash", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      await query.single();
 
     if (predictionError || !latestPrediction) {
       return NextResponse.json({
